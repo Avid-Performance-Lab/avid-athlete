@@ -20,15 +20,14 @@
         const idFromUrl = urlParams.get('id');
         
         if (idFromUrl) {
-          // Si l'ID est dans l'URL, on le sauvegarde ou on le met à jour
+          // Étape 1 : On mémorise l'ID dès qu'il est présent dans le lien
           localStorage.setItem('athleteId', idFromUrl);
         } else {
-          // Si l'ID n'est pas dans l'URL (cas de l'app installée), 
-          // on regarde s'il existe en mémoire
+          // Étape 2 : Si l'ID a disparu (cas de l'app installée), on le récupère en mémoire
           const savedId = localStorage.getItem('athleteId');
           if (savedId) {
-            // On réinjecte l'ID sauvegardé dans l'URL pour que l'app fonctionne
             const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?id=' + savedId;
+            // Étape 3 : On remet l'ID discrètement dans l'URL pour que l'app fonctionne
             window.history.replaceState({path:newUrl}, '', newUrl);
           }
         }
