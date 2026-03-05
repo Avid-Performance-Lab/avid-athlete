@@ -59,12 +59,22 @@ export default function App() {
   const [cahiers, setCahiers] = useState({})
   const [toast, setToast] = useState(null)
 
-  // Read athlete ID from URL
+  // Read athlete ID from URL — or from localStorage (needed when PWA launched from home screen)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const id = params.get('id')
-    if (!id) { setError('no_id'); setLoading(false); return }
-    setAthleteId(id)
+    const idFromUrl = params.get('id')
+    if (idFromUrl) {
+      try { localStorage.setItem('avid_athlete_id', idFromUrl) } catch(e) {}
+      setAthleteId(idFromUrl)
+      return
+    }
+    // No URL param — try saved ID (PWA standalone mode)
+    try {
+      const saved = localStorage.getItem('avid_athlete_id')
+      if (saved) { setAthleteId(saved); return }
+    } catch(e) {}
+    setError('no_id')
+    setLoading(false)
   }, [])
 
   // Subscribe to athlete data
@@ -141,7 +151,7 @@ export default function App() {
         {tab === 'programme' && <ProgrammeView athlete={athlete} />}
         {tab === 'cahier'    && <CahierView athlete={athlete} cahiers={cahiers} saveCahier={saveCahier} notify={notify} />}
         {tab === 'stats'     && <StatsView athlete={athlete} cahiers={cahiers} />}
-        {tab === 'profil'    && <ProfilView athlete={athlete} />}
+        {tab === 'profil'    && <ProfilView athlete={athlete} cahiers={cahiers} />}
       </div>
 
       {/* Bottom nav */}
@@ -551,19 +561,35 @@ function StatsView({ athlete, cahiers }) {
         const key = `${athlete.id}-${bloc.id}-${sem.id}-${seai}`
         const cahier = cahiers[key]
         if (!cahier?.data) return
+        // RPE moyen de la séance = moyenne de tous les exercices renseignés
+        const rpeValues = cahier.data
+          .map(c => parseFloat(c.intensite))
+          .filter(v => !isNaN(v) && v > 0)
+        const rpeMoyenSeance = rpeValues.length
+          ? Math.round((rpeValues.reduce((s, v) => s + v, 0) / rpeValues.length) * 10) / 10
+          : null
         sea.exercices?.forEach((ex, ei) => {
           const nom = ex.nom
           if (!progressData[nom]) progressData[nom] = []
           const cex = cahier.data[ei]
           if (!cex?.series) return
-          const valid = cex.series.filter(s => s.reps && s.kg && parseFloat(s.reps) > 0 && parseFloat(s.kg) > 0)
-          if (!valid.length) return
-          const maxKg = Math.max(...valid.map(s => parseFloat(s.kg) || 0))
-          const vol = valid.reduce((s, sr) => s + (parseFloat(sr.reps) || 0) * (parseFloat(sr.kg) || 0), 0)
+          // Reps max de la séance (toutes séries confondues)
+          const validReps = cex.series.filter(s => parseFloat(s.reps) > 0)
+          // Volume : reps * kg
+          const validVol = cex.series.filter(s => parseFloat(s.kg) > 0 && parseFloat(s.reps) > 0)
+          // Charge max tous temps (pour les PR du profil)
+          const validKg = cex.series.filter(s => parseFloat(s.kg) > 0)
+          if (!validReps.length && !validKg.length) return
+          const maxReps = validReps.length ? Math.max(...validReps.map(s => parseFloat(s.reps) || 0)) : 0
+          const maxKg = validKg.length ? Math.max(...validKg.map(s => parseFloat(s.kg) || 0)) : 0
+          const vol = validVol.reduce((s, sr) => s + (parseFloat(sr.reps) || 0) * (parseFloat(sr.kg) || 0), 0)
+          // RPE : valeur de l'exercice si saisie, sinon moyenne de la séance
+          const rpeEx = parseFloat(cex.intensite) > 0 ? parseFloat(cex.intensite) : rpeMoyenSeance
           progressData[nom].push({
             label: `${bloc.label.replace('BLOCK ', 'B')}/${sem.label}`,
-            maxKg, vol,
-            rpe: cex.intensite || '',
+            totalReps, maxKg, vol,
+            rpe: rpeEx,
+            rpeMoyenSeance,
             date: cahier.updatedAt,
           })
         })
@@ -678,23 +704,36 @@ function StatsView({ athlete, cahiers }) {
 
                 {/* Mini bar chart - max kg */}
                 <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>
-                  CHARGE MAX (kg)
+                  REPS TOTALES PAR SÉANCE
                 </div>
-                <MiniBar data={data} field="maxKg" color={C.yellow} />
+                <MiniBar data={data} field="totalReps" color={C.yellow} unit="" />
 
                 <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1,
                   marginBottom: 6, marginTop: 12 }}>
-                  VOLUME (kg)
+                  VOLUME TOTAL (kg)
                 </div>
-                <MiniBar data={data} field="vol" color={C.blue} />
+                <MiniBar data={data} field="vol" color={C.blue} unit="kg" />
 
-                {last.rpe && (
-                  <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>
-                    Dernier RPE ressenti :
-                    <span style={{ marginLeft: 6, fontWeight: 800,
-                      color: parseInt(last.rpe) >= 9 ? C.red : parseInt(last.rpe) >= 7 ? C.yellow : C.green }}>
-                      {last.rpe}/10
-                    </span>
+                {(last.rpe || last.rpeMoyenSeance) && (
+                  <div style={{ marginTop: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {last.rpe && (
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                        RPE exercice :
+                        <span style={{ marginLeft: 5, fontWeight: 800,
+                          color: last.rpe >= 9 ? C.red : last.rpe >= 7 ? C.yellow : C.green }}>
+                          {last.rpe}/10
+                        </span>
+                      </div>
+                    )}
+                    {last.rpeMoyenSeance && (
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                        Moy. séance :
+                        <span style={{ marginLeft: 5, fontWeight: 800,
+                          color: last.rpeMoyenSeance >= 9 ? C.red : last.rpeMoyenSeance >= 7 ? C.yellow : C.green }}>
+                          {last.rpeMoyenSeance}/10
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -725,8 +764,90 @@ function MiniBar({ data, field, color }) {
   )
 }
 
+
+// ── Personal Records ──────────────────────────────────────────────────────────
+function PersonalRecords({ athlete, cahiers }) {
+  // Calcule le PR (charge max historique) par exercice sur tous les cahiers
+  const prs = {}
+  athlete?.blocs?.forEach(bloc => {
+    bloc.semaines?.forEach(sem => {
+      sem.seances?.forEach((sea, seai) => {
+        const key = `${athlete.id}-${bloc.id}-${sem.id}-${seai}`
+        const cahier = cahiers[key]
+        if (!cahier?.data) return
+        sea.exercices?.forEach((ex, ei) => {
+          const cex = cahier.data[ei]
+          if (!cex?.series) return
+          cex.series.forEach(s => {
+            const kg = parseFloat(s.kg)
+            const reps = parseFloat(s.reps)
+            if (kg > 0) {
+              if (!prs[ex.nom] || kg > prs[ex.nom].kg) {
+                prs[ex.nom] = {
+                  kg,
+                  reps: reps || null,
+                  label: `${bloc.label.replace('BLOCK ', 'B')} / ${sem.label}`,
+                  cat: ex.cat,
+                }
+              }
+            }
+          })
+        })
+      })
+    })
+  })
+
+  const prList = Object.entries(prs).sort((a, b) => b[1].kg - a[1].kg)
+  if (!prList.length) return null
+
+  return (
+    <div style={{ marginTop: 20, marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>
+        🏆 RECORDS PERSONNELS — CHARGE MAX
+      </div>
+      <div style={{ background: C.card, borderRadius: 10, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+        {prList.map(([nom, pr], i) => {
+          const cc = CAT_COLORS[pr.cat] || CAT_COLORS['FULL BODY']
+          return (
+            <div key={nom} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '11px 14px',
+              borderBottom: i < prList.length - 1 ? `1px solid ${C.border}` : 'none',
+              background: i === 0 ? '#1a1500' : 'transparent',
+            }}>
+              {/* Médaille pour le premier */}
+              <div style={{ fontSize: 16, flexShrink: 0, width: 20, textAlign: 'center' }}>
+                {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ''}
+              </div>
+              {/* Catégorie */}
+              <div style={{ background: cc.bg, color: cc.text, fontSize: 8, fontWeight: 800,
+                padding: '2px 7px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>
+                {pr.cat || '—'}
+              </div>
+              {/* Nom */}
+              <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: C.text,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {nom}
+              </div>
+              {/* PR value */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 800,
+                  color: i === 0 ? C.yellow : C.white }}>
+                  {pr.kg} kg
+                  {pr.reps ? <span style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>× {pr.reps}</span> : null}
+                </div>
+                <div style={{ fontSize: 8, color: C.muted }}>{pr.label}</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Profil View ───────────────────────────────────────────────────────────────
-function ProfilView({ athlete }) {
+function ProfilView({ athlete, cahiers }) {
   if (!athlete) return null
 
   const stats = [
@@ -805,6 +926,9 @@ function ProfilView({ athlete }) {
           <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{athlete.notes}</div>
         </div>
       )}
+
+      {/* PR — Records personnels */}
+      <PersonalRecords athlete={athlete} cahiers={cahiers} />
 
       {/* Install PWA hint */}
       <div style={{ marginTop: 20, background: '#0a1020', borderRadius: 10, padding: '14px 16px',
