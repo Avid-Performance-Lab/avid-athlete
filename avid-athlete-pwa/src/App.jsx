@@ -656,7 +656,7 @@ function StatsView({ athlete, cahiers }) {
     })
   })
 
-  const exoNames = Object.keys(progressData).filter(k => progressData[k].length > 0)
+  const exoNames = Object.keys(progressData).filter(k => Array.isArray(progressData[k]) && progressData[k].length > 0)
 
   // Count completed sessions
   const totalPrescribed = athlete?.blocs?.reduce((s, b) =>
@@ -738,9 +738,10 @@ function StatsView({ athlete, cahiers }) {
 
           {(selExo ? [selExo] : exoNames).map(nom => {
             const data = progressData[nom]
+            if (!data || data.length === 0) return null
             const last = data[data.length - 1]
             const first = data[0]
-            const prog = last.maxKg - first.maxKg
+            const prog = (last.maxKg || 0) - (first.maxKg || 0)
             return (
               <div key={nom} style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
                 marginBottom: 12, border: `1px solid ${C.border}` }}>
