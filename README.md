@@ -1,2 +1,0 @@
-# avid-athlete
-Individual apps
