@@ -611,58 +611,65 @@ function CahierView({ athlete, cahiers, saveCahier, notify }) {
 // ── Stats View ────────────────────────────────────────────────────────────────
 function StatsView({ athlete, cahiers }) {
   const [selExo, setSelExo] = useState(null)
+  const [statsError, setStatsError] = useState(null)
 
-  // Build progression per exercise
-  const progressData = {}
-  athlete?.blocs?.forEach((bloc, bi) => {
-    bloc.semaines?.forEach((sem, si) => {
-      sem.seances?.forEach((sea, seai) => {
-        const key = `${athlete.id}-${bloc.id}-${sem.id}-${seai}`
-        const cahier = cahiers[key]
-        if (!cahier?.data) return
-        // RPE moyen de la séance = moyenne de tous les exercices renseignés
-        const rpeValues = cahier.data
-          .map(c => parseFloat(c.intensite))
-          .filter(v => !isNaN(v) && v > 0)
-        const rpeMoyenSeance = rpeValues.length
-          ? Math.round((rpeValues.reduce((s, v) => s + v, 0) / rpeValues.length) * 10) / 10
-          : null
-        sea.exercices?.forEach((ex, ei) => {
-          const nom = ex.nom
-          if (!progressData[nom]) progressData[nom] = []
-          const cex = cahier.data[ei]
-          if (!cex?.series) return
-          // Reps max de la séance (toutes séries confondues)
-          const validReps = cex.series.filter(s => parseFloat(s.reps) > 0)
-          // Volume : reps * kg
-          const validVol = cex.series.filter(s => parseFloat(s.kg) > 0 && parseFloat(s.reps) > 0)
-          // Charge max tous temps (pour les PR du profil)
-          const validKg = cex.series.filter(s => parseFloat(s.kg) > 0)
-          if (!validReps.length && !validKg.length) return
-          const totalReps = validReps.reduce((s, sr) => s + (parseFloat(sr.reps) || 0), 0)
-          const maxKg = validKg.length ? Math.max(...validKg.map(s => parseFloat(s.kg) || 0)) : 0
-          const vol = validVol.reduce((s, sr) => s + (parseFloat(sr.reps) || 0) * (parseFloat(sr.kg) || 0), 0)
-          // RPE : valeur de l'exercice si saisie, sinon moyenne de la séance
-          const rpeEx = parseFloat(cex.intensite) > 0 ? parseFloat(cex.intensite) : rpeMoyenSeance
-          progressData[nom].push({
-            label: `${bloc.label.replace('BLOCK ', 'B')}/${sem.label}`,
-            totalReps, maxKg, vol,
-            rpe: rpeEx,
-            rpeMoyenSeance,
-            date: cahier.updatedAt,
+  // Build progression per exercise — wrapped in try/catch to prevent white screen
+  let progressData = {}
+  let exoNames = []
+  try {
+    athlete?.blocs?.forEach((bloc) => {
+      bloc.semaines?.forEach((sem) => {
+        sem.seances?.forEach((sea, seai) => {
+          const key = `${athlete.id}-${bloc.id}-${sem.id}-${seai}`
+          const cahier = cahiers[key]
+          if (!cahier?.data) return
+          const rpeValues = cahier.data
+            .map(c => parseFloat(c.intensite))
+            .filter(v => !isNaN(v) && v > 0)
+          const rpeMoyenSeance = rpeValues.length
+            ? Math.round((rpeValues.reduce((s, v) => s + v, 0) / rpeValues.length) * 10) / 10
+            : null
+          sea.exercices?.forEach((ex, ei) => {
+            const nom = ex.nom
+            if (!nom) return
+            if (!progressData[nom]) progressData[nom] = []
+            const cex = cahier.data[ei]
+            if (!cex || !Array.isArray(cex.series)) return
+            const validReps = cex.series.filter(s => parseFloat(s.reps) > 0)
+            const validVol  = cex.series.filter(s => parseFloat(s.kg) > 0 && parseFloat(s.reps) > 0)
+            const validKg   = cex.series.filter(s => parseFloat(s.kg) > 0)
+            if (!validReps.length && !validKg.length) return
+            const totalReps = validReps.reduce((s, sr) => s + (parseFloat(sr.reps) || 0), 0)
+            const maxKg     = validKg.length ? Math.max(...validKg.map(s => parseFloat(s.kg) || 0)) : 0
+            const vol       = validVol.reduce((s, sr) => s + (parseFloat(sr.reps) || 0) * (parseFloat(sr.kg) || 0), 0)
+            const rpeEx     = parseFloat(cex.intensite) > 0 ? parseFloat(cex.intensite) : rpeMoyenSeance
+            progressData[nom].push({
+              label: `${(bloc.label || '').replace('BLOCK ', 'B')}/${sem.label || ''}`,
+              totalReps, maxKg, vol,
+              rpe: rpeEx,
+              rpeMoyenSeance,
+              date: cahier.updatedAt,
+            })
           })
         })
       })
     })
-  })
+    exoNames = Object.keys(progressData).filter(k => Array.isArray(progressData[k]) && progressData[k].length > 0)
+  } catch(e) {
+    console.error('StatsView build error:', e)
+    setStatsError(e.message)
+  }
 
-  const exoNames = Object.keys(progressData).filter(k => Array.isArray(progressData[k]) && progressData[k].length > 0)
+  if (statsError) return (
+    <div style={{ padding: 24, color: C.red, fontSize: 13 }}>
+      Erreur stats : {statsError}
+    </div>
+  )
 
-  // Count completed sessions
   const totalPrescribed = athlete?.blocs?.reduce((s, b) =>
-    s + b.semaines?.reduce((ss, sem) => ss + (sem.seances?.length || 0), 0), 0) || 0
+    s + (b.semaines?.reduce((ss, sem) => ss + (sem.seances?.length || 0), 0) || 0), 0) || 0
   const totalDone = Object.keys(cahiers).filter(k =>
-    cahiers[k]?.data?.some(c => c.series?.some(s => s.reps || s.kg))
+    cahiers[k]?.data?.some(c => Array.isArray(c.series) && c.series.some(s => s.reps || s.kg))
   ).length
 
   return (
@@ -671,7 +678,6 @@ function StatsView({ athlete, cahiers }) {
         MES STATISTIQUES
       </div>
 
-      {/* Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
         {[
           { l: 'SÉANCES FAITES', v: totalDone, c: C.green },
@@ -684,14 +690,11 @@ function StatsView({ athlete, cahiers }) {
         ))}
       </div>
 
-      {/* Completion bar */}
       {totalPrescribed > 0 && (
         <div style={{ background: C.card, borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>PROGRESSION GLOBALE</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.yellow }}>
-              {totalDone}/{totalPrescribed}
-            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.yellow }}>{totalDone}/{totalPrescribed}</span>
           </div>
           <div style={{ background: C.border, borderRadius: 4, height: 6, overflow: 'hidden' }}>
             <div style={{ background: C.green, height: '100%', borderRadius: 4,
@@ -712,7 +715,6 @@ function StatsView({ athlete, cahiers }) {
         </div>
       )}
 
-      {/* Exercise filter */}
       {exoNames.length > 0 && (
         <>
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 16 }}>
@@ -739,9 +741,9 @@ function StatsView({ athlete, cahiers }) {
           {(selExo ? [selExo] : exoNames).map(nom => {
             const data = progressData[nom]
             if (!data || data.length === 0) return null
-            const last = data[data.length - 1]
+            const last  = data[data.length - 1]
             const first = data[0]
-            const prog = (last.maxKg || 0) - (first.maxKg || 0)
+            const prog  = (last.maxKg || 0) - (first.maxKg || 0)
             return (
               <div key={nom} style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
                 marginBottom: 12, border: `1px solid ${C.border}` }}>
@@ -761,19 +763,15 @@ function StatsView({ athlete, cahiers }) {
                     </div>
                   )}
                 </div>
-
-                {/* Mini bar chart - max kg */}
                 <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>
                   REPS TOTALES PAR SÉANCE
                 </div>
-                <MiniBar data={data} field="totalReps" color={C.yellow} unit="" />
-
+                <MiniBar data={data} field="totalReps" color={C.yellow} />
                 <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1,
                   marginBottom: 6, marginTop: 12 }}>
                   VOLUME TOTAL (kg)
                 </div>
-                <MiniBar data={data} field="vol" color={C.blue} unit="kg" />
-
+                <MiniBar data={data} field="vol" color={C.blue} />
                 {(last.rpe || last.rpeMoyenSeance) && (
                   <div style={{ marginTop: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     {last.rpe && (
