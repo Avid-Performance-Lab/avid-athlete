@@ -738,11 +738,9 @@ function StatsView({ athlete, cahiers }) {
 
           {(selExo ? [selExo] : exoNames).map(nom => {
             const data = progressData[nom]
-            if (!data || data.length === 0) return null
             const last = data[data.length - 1]
             const first = data[0]
-            if (!last || !first) return null
-            const prog = (last.maxKg || 0) - (first.maxKg || 0)
+            const prog = last.maxKg - first.maxKg
             return (
               <div key={nom} style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
                 marginBottom: 12, border: `1px solid ${C.border}` }}>
