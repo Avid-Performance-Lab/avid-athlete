@@ -8,29 +8,34 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="AVID Athlete" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/icon_avid_A.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet" />
     <title>AVID Athlete</title>
-
     <script>
       (function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const idFromUrl = urlParams.get('id');
-        
-        if (idFromUrl) {
-          // Étape 1 : On mémorise l'ID dès qu'il est présent dans le lien
-          localStorage.setItem('athleteId', idFromUrl);
-        } else {
-          // Étape 2 : Si l'ID a disparu (cas de l'app installée), on le récupère en mémoire
-          const savedId = localStorage.getItem('athleteId');
-          if (savedId) {
-            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?id=' + savedId;
-            // Étape 3 : On remet l'ID discrètement dans l'URL pour que l'app fonctionne
-            window.history.replaceState({path:newUrl}, '', newUrl);
+        try {
+          var urlParams = new URLSearchParams(window.location.search);
+          var idFromUrl = urlParams.get('id');
+
+          if (idFromUrl) {
+            // Lien reçu avec un ID → on le mémorise
+            localStorage.setItem('avid_athlete_id', idFromUrl);
+          } else {
+            // Pas d'ID dans l'URL (ex: lancement depuis écran d'accueil)
+            // On récupère l'ID sauvegardé et on le remet dans l'URL
+            var savedId = localStorage.getItem('avid_athlete_id');
+            if (savedId) {
+              var newUrl = window.location.protocol + '//' +
+                           window.location.host +
+                           window.location.pathname +
+                           '?id=' + savedId;
+              window.history.replaceState({}, '', newUrl);
+            }
           }
-        }
+        } catch(e) {}
       })();
     </script>
   </head>
