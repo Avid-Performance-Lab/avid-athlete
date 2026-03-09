@@ -23,15 +23,11 @@ function catColor(label = '') {
   return CAT_COLORS[k] || CAT_COLORS['FULL BODY']
 }
 
-// ── Logo SVG AVID ─────────────────────────────────────────────────────────────
-function AvidLogo({ size = 32 }) {
+// ── Logo AVID ─────────────────────────────────────────────────────────────────
+function AvidLogo({ height = 28 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <rect width="100" height="100" rx="16" fill="#EA4335"/>
-      <text x="50" y="72" textAnchor="middle"
-        fontFamily="'Barlow Condensed', Arial Narrow, sans-serif"
-        fontWeight="900" fontSize="72" fill="white" letterSpacing="-2">A</text>
-    </svg>
+    <img src="/logo_avid.svg" alt="AVID Performance Lab"
+      style={{ height, width: 'auto', objectFit: 'contain' }} />
   )
 }
 
@@ -158,7 +154,7 @@ export default function App() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: online ? C.green : C.red }} />
-          <AvidLogo size={36} />
+          <AvidLogo height={28} />
         </div>
       </div>
 
