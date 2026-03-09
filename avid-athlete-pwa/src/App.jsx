@@ -23,13 +23,15 @@ function catColor(label = '') {
   return CAT_COLORS[k] || CAT_COLORS['FULL BODY']
 }
 
-// ── Logo AVID Performance Lab ────────────────────────────────────────────────
-const LOGO_SRC = "data:image/png;base64,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AREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQEREBERAREQf//Z"
-
-function AvidLogo({ height = 32 }) {
+// ── Logo SVG AVID ─────────────────────────────────────────────────────────────
+function AvidLogo({ size = 32 }) {
   return (
-    <img src={LOGO_SRC} alt="AVID Performance Lab"
-      style={{ height, width: 'auto', objectFit: 'contain' }} />
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <rect width="100" height="100" rx="16" fill="#EA4335"/>
+      <text x="50" y="72" textAnchor="middle"
+        fontFamily="'Barlow Condensed', Arial Narrow, sans-serif"
+        fontWeight="900" fontSize="72" fill="white" letterSpacing="-2">A</text>
+    </svg>
   )
 }
 
@@ -156,7 +158,7 @@ export default function App() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: online ? C.green : C.red }} />
-          <AvidLogo height={28} />
+          <AvidLogo size={36} />
         </div>
       </div>
 
@@ -826,6 +828,198 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
           cursor: saving ? 'default' : 'pointer', letterSpacing: 1 }}>
         {saving ? '⏳ SAUVEGARDE...' : '✓ SAUVEGARDER'}
       </button>
+
+      {/* Historique nutrition */}
+      <NutritionHistory nutri={nutri} />
+    </div>
+  )
+}
+
+// ── Nutrition History Chart ────────────────────────────────────────────────────
+function NutritionHistory({ nutri }) {
+  const [days, setDays] = useState(7)
+
+  // Build sorted history from nutri collection
+  const history = Object.entries(nutri)
+    .map(([key, val]) => {
+      const d = val?.data || {}
+      const date = key.split('-').slice(-3).join('-') // extract YYYY-MM-DD
+      return {
+        date,
+        label: new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+        kcal: Math.round((parseFloat(d.glucides)||0)*4 + (parseFloat(d.lipides)||0)*9 + (parseFloat(d.proteines)||0)*4),
+        glucides: parseFloat(d.glucides) || 0,
+        lipides: parseFloat(d.lipides) || 0,
+        proteines: parseFloat(d.proteines) || 0,
+        fatigue: parseFloat(d.fatigue) || 0,
+      }
+    })
+    .filter(e => e.date && e.date.match(/^\d{4}-\d{2}-\d{2}$/))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-days)
+
+  if (history.length < 2) return (
+    <div style={{ marginTop: 24, background: C.card, borderRadius: 10, padding: '20px',
+      border: `1px dashed ${C.border}`, textAlign: 'center' }}>
+      <div style={{ fontSize: 28, marginBottom: 8 }}>📈</div>
+      <div style={{ fontSize: 12, color: C.muted }}>
+        Sauvegarde au moins 2 jours pour voir l'évolution
+      </div>
+    </div>
+  )
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2 }}>
+          ÉVOLUTION — {days} DERNIERS JOURS
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[7, 14].map(d => (
+            <button key={d} onClick={() => setDays(d)}
+              style={{ background: days === d ? C.yellow : C.card, color: days === d ? C.navy : C.muted,
+                border: `1px solid ${days === d ? C.yellow : C.border}`,
+                borderRadius: 4, padding: '3px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}>
+              {d}J
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Graphique Kcal */}
+      <NutriLineChart data={history} field="kcal" label="KCAL" color={C.red} unit="kcal" />
+
+      {/* Graphique Macros */}
+      <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 10,
+        border: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>
+          MACROS (g)
+        </div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
+          {[
+            { f: 'glucides', label: 'GLUC', color: C.yellow },
+            { f: 'lipides',  label: 'LIP',  color: C.orange },
+            { f: 'proteines',label: 'PROT', color: C.blue },
+          ].map(m => (
+            <div key={m.f} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: m.color }} />
+              <span style={{ fontSize: 9, color: m.color, fontWeight: 700 }}>{m.label}</span>
+            </div>
+          ))}
+        </div>
+        <MultiLineChart data={history} fields={[
+          { f: 'glucides', color: C.yellow },
+          { f: 'lipides',  color: C.orange },
+          { f: 'proteines',color: C.blue },
+        ]} />
+        <DateAxis data={history} />
+      </div>
+
+      {/* Graphique Fatigue */}
+      <NutriLineChart data={history} field="fatigue" label="FATIGUE" color={C.red}
+        unit="/10" yMax={10} zones={[
+          { from: 0, to: 4, color: '#0a2010' },
+          { from: 5, to: 7, color: '#1a1500' },
+          { from: 8, to: 10, color: '#200a0a' },
+        ]} />
+    </div>
+  )
+}
+
+function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }) {
+  const vals = data.map(d => d[field] || 0)
+  const max = yMax || Math.max(...vals) || 1
+  const min = 0
+  const W = 280, H = 80, pad = 20
+
+  const points = vals.map((v, i) => {
+    const x = pad + (i / Math.max(1, vals.length - 1)) * (W - pad * 2)
+    const y = H - pad - ((v - min) / (max - min)) * (H - pad * 2)
+    return { x, y, v }
+  })
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const areaD = pathD + ` L${points[points.length-1].x},${H-pad} L${points[0].x},${H-pad} Z`
+
+  return (
+    <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 10,
+      border: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>{label} ({unit})</div>
+        <div style={{ fontSize: 11, fontWeight: 800, color }}>
+          {vals[vals.length - 1]}{unit === '/10' ? '/10' : ''}
+        </div>
+      </div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+        {/* Zone backgrounds */}
+        {zones?.map((z, zi) => (
+          <rect key={zi}
+            x={pad} y={H - pad - (z.to / max) * (H - pad*2)}
+            width={W - pad*2}
+            height={((z.to - z.from) / max) * (H - pad*2)}
+            fill={z.color} />
+        ))}
+        {/* Area fill */}
+        <path d={areaD} fill={color} opacity={0.12} />
+        {/* Line */}
+        <path d={pathD} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        {/* Dots + values */}
+        {points.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r={3} fill={color} />
+            {(i === 0 || i === points.length - 1 || vals.length <= 7) && (
+              <text x={p.x} y={p.y - 6} textAnchor="middle"
+                fontSize={7} fill={color} fontWeight="700">
+                {p.v > 0 ? Math.round(p.v) : ''}
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
+      <DateAxis data={data} />
+    </div>
+  )
+}
+
+function MultiLineChart({ data, fields }) {
+  const allVals = fields.flatMap(({ f }) => data.map(d => d[f] || 0))
+  const max = Math.max(...allVals) || 1
+  const W = 280, H = 70, pad = 16
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+      {fields.map(({ f, color }) => {
+        const vals = data.map(d => d[f] || 0)
+        const points = vals.map((v, i) => ({
+          x: pad + (i / Math.max(1, vals.length - 1)) * (W - pad * 2),
+          y: H - pad - (v / max) * (H - pad * 1.5),
+          v,
+        }))
+        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+        return (
+          <g key={f}>
+            <path d={pathD} fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
+            {points.map((p, i) => (
+              <circle key={i} cx={p.x} cy={p.y} r={2.5} fill={color} />
+            ))}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+function DateAxis({ data }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, paddingLeft: 2, paddingRight: 2 }}>
+      {data.map((d, i) => (
+        (i === 0 || i === data.length - 1 || data.length <= 7) && (
+          <div key={i} style={{ fontSize: 7, color: C.muted, textAlign: 'center',
+            flex: i === 0 || i === data.length - 1 ? '0 0 auto' : 1 }}>
+            {d.label}
+          </div>
+        )
+      ))}
     </div>
   )
 }
