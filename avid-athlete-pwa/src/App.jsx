@@ -26,7 +26,7 @@ function catColor(label = '') {
 // ── Logo AVID ─────────────────────────────────────────────────────────────────
 function AvidLogo({ height = 28 }) {
   return (
-    <img src="/logo_avid.svg" alt="AVID Performance Lab"
+    <img src="/icon_avid_A.svg" alt="AVID Performance Lab"
       style={{ height, width: 'auto', objectFit: 'contain' }} />
   )
 }
@@ -322,6 +322,8 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
     return seance.exercices.map((ex, ei) => {
       const existing = cahierData?.[ei]
       return {
+        nom: ex.nom,
+        cat: ex.cat,
         series: existing?.series?.length
           ? existing.series
           : ex.series.map(() => ({ reps: '', kg: '' })),
@@ -339,6 +341,34 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
     notify('✓ Séance sauvegardée !', C.green)
   }
 
+  function addSerieToExo(ei) {
+    setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+      ...x, series: [...x.series, { reps: '', kg: '' }]
+    }))
+  }
+
+  function removeSerieFromExo(ei, si) {
+    setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+      ...x, series: x.series.filter((_, i) => i !== si)
+    }))
+  }
+
+  function addExoToSeance() {
+    setLocal(prev => [...prev, {
+      nom: '', cat: 'FULL BODY',
+      series: [{ reps: '', kg: '' }, { reps: '', kg: '' }, { reps: '', kg: '' }],
+      intensite: '', remarques: ''
+    }])
+  }
+
+  function removeExoFromSeance(ei) {
+    setLocal(prev => prev.filter((_, i) => i !== ei))
+  }
+
+  function updateExoNom(ei, val) {
+    setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, nom: val }))
+  }
+
   return (
     <div className="fade-in" style={{ padding: '14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -353,8 +383,11 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
         </div>
       </div>
 
-      {seance.exercices?.map((ex, ei) => {
-        const cc = CAT_COLORS[ex.cat] || CAT_COLORS['FULL BODY']
+      {(readOnly ? seance.exercices : (local || [])).map((ex, ei) => {
+        const srcEx = seance.exercices?.[ei] || ex
+        const cc = CAT_COLORS[(ex.cat || srcEx.cat)] || CAT_COLORS['FULL BODY']
+        // Pour les exercices du programme, utiliser seance.exercices; pour les extras, utiliser local
+        ex = ei < seance.exercices.length ? seance.exercices[ei] : { nom: local?.[ei]?.nom || '', cat: local?.[ei]?.cat || 'FULL BODY', series: [], intensite: '' }
         return (
           <div key={ex.id || ei} style={{ background: C.card, borderRadius: 10, marginBottom: 12,
             border: `1px solid ${C.border}`, overflow: 'hidden' }}>
@@ -362,7 +395,15 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
               display: 'flex', alignItems: 'center', gap: 10, background: '#111' }}>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 9, fontWeight: 800,
                 padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{ex.cat}</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, flex: 1 }}>{ex.nom}</div>
+              {(!readOnly && ei >= seance.exercices.length) ? (
+                <input value={local?.[ei]?.nom || ''}
+                  onChange={e => updateExoNom(ei, e.target.value)}
+                  placeholder="Nom de l'exercice"
+                  style={{ background: 'none', border: 'none', borderBottom: `1px solid ${C.yellow}`,
+                    fontSize: 13, fontWeight: 800, color: C.white, flex: 1, outline: 'none' }}/>
+              ) : (
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.white, flex: 1 }}>{ex.nom}</div>
+              )}
               <div style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3,
                 background: ex.intensite >= 9 ? C.red : ex.intensite >= 7 ? C.yellow : C.green,
                 color: ex.intensite >= 7 ? C.bg : C.white }}>
@@ -390,25 +431,37 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                 </div>
               )}
 
-              {ex.series?.map((sr, si) => {
+              {(readOnly ? ex.series : local?.[ei]?.series || []).map((sr, si) => {
+                const prescSr = ex.series?.[si]
+                const prescReps = prescSr ? (Array.isArray(prescSr) ? prescSr[0] : prescSr.reps) : '—'
+                const prescKg   = prescSr ? (Array.isArray(prescSr) ? prescSr[1] : prescSr.kg)   : '—'
                 const reps = Array.isArray(sr) ? sr[0] : sr.reps
-                const kg = Array.isArray(sr) ? sr[1] : sr.kg
+                const kg   = Array.isArray(sr) ? sr[1] : sr.kg
+                const isExtra = !readOnly && si >= (ex.series?.length || 0)
                 return (
                   <div key={si} style={{ display: 'grid',
-                    gridTemplateColumns: readOnly ? '28px 1fr 1fr' : '22px 1fr 1fr 1fr 1fr',
-                    gap: readOnly ? 6 : 5, marginBottom: 6, alignItems: 'center' }}>
-                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textAlign: 'center' }}>{si + 1}</div>
-                    <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
-                      fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'center' }}>
-                      {reps || '—'}
-                    </div>
-                    <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
-                      fontSize: 12, fontWeight: 700,
-                      color: parseFloat(kg) > 0 ? C.yellow : C.muted, textAlign: 'center' }}>
-                      {parseFloat(kg) > 0 ? `${kg}kg` : '—'}
-                    </div>
-                    {!readOnly && (
+                    gridTemplateColumns: readOnly ? '28px 1fr 1fr' : '22px 1fr 1fr 1fr 1fr 24px',
+                    gap: readOnly ? 6 : 4, marginBottom: 6, alignItems: 'center' }}>
+                    <div style={{ fontSize: 11, color: isExtra ? C.orange : C.muted,
+                      fontWeight: 700, textAlign: 'center' }}>{si + 1}{isExtra ? '+' : ''}</div>
+                    {readOnly ? (
                       <>
+                        <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
+                          fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'center' }}>{reps || '—'}</div>
+                        <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
+                          fontSize: 12, fontWeight: 700,
+                          color: parseFloat(kg) > 0 ? C.yellow : C.muted, textAlign: 'center' }}>
+                          {parseFloat(kg) > 0 ? `${kg}kg` : '—'}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
+                          fontSize: 11, color: C.muted, textAlign: 'center' }}>{prescReps || '—'}</div>
+                        <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
+                          fontSize: 11, color: C.muted, textAlign: 'center' }}>
+                          {parseFloat(prescKg) > 0 ? `${prescKg}` : '—'}
+                        </div>
                         <input type="number" inputMode="decimal"
                           value={local?.[ei]?.series?.[si]?.reps || ''}
                           onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
@@ -416,7 +469,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                           }))}
                           placeholder="reps"
                           style={{ background: '#1a1a1a', border: `1px solid ${C.green}`,
-                            borderRadius: 4, padding: '6px 4px', fontSize: 12, fontWeight: 700,
+                            borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
                             color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}
                         />
                         <input type="number" inputMode="decimal"
@@ -426,14 +479,25 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                           }))}
                           placeholder="kg"
                           style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`,
-                            borderRadius: 4, padding: '6px 4px', fontSize: 12, fontWeight: 700,
+                            borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
                             color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}
                         />
+                        <button onClick={() => removeSerieFromExo(ei, si)}
+                          style={{ background: 'none', border: 'none', color: C.muted,
+                            fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
                       </>
                     )}
                   </div>
                 )
               })}
+              {!readOnly && (
+                <button onClick={() => addSerieToExo(ei)}
+                  style={{ width: '100%', background: 'none', border: `1px dashed ${C.orange}`,
+                    borderRadius: 5, color: C.orange, fontSize: 11, fontWeight: 700,
+                    padding: '5px', cursor: 'pointer', marginTop: 4, letterSpacing: 1 }}>
+                  + SÉRIE SUPPLÉMENTAIRE
+                </button>
+              )}
 
               {!readOnly && (
                 <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
@@ -468,12 +532,20 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
       })}
 
       {!readOnly && (
-        <button onClick={handleSave} disabled={saving}
-          style={{ width: '100%', background: saving ? C.muted : C.green, color: C.white,
-            border: 'none', borderRadius: 10, padding: '14px', fontSize: 14, fontWeight: 800,
-            cursor: saving ? 'default' : 'pointer', letterSpacing: 1, marginTop: 4 }}>
-          {saving ? '⏳ SAUVEGARDE...' : '✓ SAUVEGARDER LA SÉANCE'}
-        </button>
+        <>
+          <button onClick={addExoToSeance}
+            style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
+              borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
+              padding: '10px', cursor: 'pointer', marginBottom: 12, letterSpacing: 1 }}>
+            + AJOUTER UN EXERCICE
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ width: '100%', background: saving ? C.muted : C.green, color: C.white,
+              border: 'none', borderRadius: 10, padding: '14px', fontSize: 14, fontWeight: 800,
+              cursor: saving ? 'default' : 'pointer', letterSpacing: 1 }}>
+            {saving ? '⏳ SAUVEGARDE...' : '✓ SAUVEGARDER LA SÉANCE'}
+          </button>
+        </>
       )}
     </div>
   )
