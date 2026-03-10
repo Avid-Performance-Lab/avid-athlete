@@ -553,10 +553,12 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 
 // ── Stats View ────────────────────────────────────────────────────────────────
 function StatsView({ athlete, cahiers }) {
-  const [selExo, setSelExo] = useState(null)
+  const [selExo, setSelExo] = useState('__tous__')
 
-  // Build progression — sécurisé
+  // Construire les données de progression par exercice et par semaine
   const progressData = {}
+  const weeklyGlobal = [] // volume global + RPE moyen par séance
+
   try {
     athlete?.blocs?.forEach(bloc => {
       bloc.semaines?.forEach(sem => {
@@ -564,35 +566,57 @@ function StatsView({ athlete, cahiers }) {
           const key = `${athlete.id}-${bloc.id}-${sem.id}-${seai}`
           const cahier = cahiers[key]
           if (!cahier?.data) return
-          const rpeValues = cahier.data.map(c => parseFloat(c.intensite)).filter(v => !isNaN(v) && v > 0)
-          const rpeMoyenSeance = rpeValues.length
-            ? Math.round((rpeValues.reduce((s, v) => s + v, 0) / rpeValues.length) * 10) / 10 : null
+
+          const label = `${(bloc.label||'').replace('BLOCK ','B')}/${sem.label||''}`
+          const date = cahier.updatedAt || 0
+
+          // RPE moyen de la séance — seulement valeurs 1-10
+          const rpeVals = cahier.data
+            .map(c => parseFloat(c.intensite))
+            .filter(v => !isNaN(v) && v >= 1 && v <= 10)
+          const rpeMoyen = rpeVals.length
+            ? Math.round((rpeVals.reduce((s,v)=>s+v,0)/rpeVals.length)*10)/10
+            : null
+
+          // Volume total séance
+          let volSeance = 0
           sea.exercices?.forEach((ex, ei) => {
             if (!ex?.nom) return
-            if (!progressData[ex.nom]) progressData[ex.nom] = []
             const cex = cahier.data[ei]
             if (!cex || !Array.isArray(cex.series)) return
-            const validVol = cex.series.filter(s => parseFloat(s.kg) > 0 && parseFloat(s.reps) > 0)
-            if (!validVol.length) return
-            const vol = validVol.reduce((s, sr) => s + (parseFloat(sr.reps) || 0) * (parseFloat(sr.kg) || 0), 0)
-            const rpeEx = parseFloat(cex.intensite) > 0 ? parseFloat(cex.intensite) : null
-            progressData[ex.nom].push({
-              label: `${(bloc.label || '').replace('BLOCK ', 'B')}/${sem.label || ''}`,
-              vol, rpe: rpeEx, rpeMoyenSeance, date: cahier.updatedAt,
-            })
+            const vol = cex.series
+              .filter(s => parseFloat(s.kg)>0 && parseFloat(s.reps)>0)
+              .reduce((s,sr) => s + (parseFloat(sr.reps)||0)*(parseFloat(sr.kg)||0), 0)
+            if (vol > 0) volSeance += vol
+
+            // RPE exercice — seulement 1-10
+            const rpeEx = parseFloat(cex.intensite)
+            const rpeExOk = (!isNaN(rpeEx) && rpeEx >= 1 && rpeEx <= 10) ? rpeEx : null
+
+            if (!progressData[ex.nom]) progressData[ex.nom] = []
+            if (vol > 0 || rpeExOk) {
+              progressData[ex.nom].push({ label, date, vol, rpe: rpeExOk, rpeMoyen })
+            }
           })
+
+          if (volSeance > 0 || rpeMoyen) {
+            weeklyGlobal.push({ label, date, vol: volSeance, rpe: rpeMoyen })
+          }
         })
       })
     })
   } catch(e) { console.error('Stats error:', e) }
 
-  const exoNames = Object.keys(progressData).filter(k => progressData[k]?.length > 0)
-
-  const totalPrescribed = athlete?.blocs?.reduce((s, b) =>
-    s + (b.semaines?.reduce((ss, sem) => ss + (sem.seances?.length || 0), 0) || 0), 0) || 0
+  const exoNames = Object.keys(progressData).filter(k => progressData[k]?.length > 0).sort()
   const totalDone = Object.keys(cahiers).filter(k =>
     cahiers[k]?.data?.some(c => Array.isArray(c.series) && c.series.some(s => s.kg))
   ).length
+  const totalPrescribed = athlete?.blocs?.reduce((s,b) =>
+    s + (b.semaines?.reduce((ss,sem) => ss+(sem.seances?.length||0), 0)||0), 0) || 0
+
+  const displayData = selExo === '__tous__'
+    ? weeklyGlobal
+    : (progressData[selExo] || [])
 
   return (
     <div className="fade-in" style={{ padding: '16px 14px' }}>
@@ -600,7 +624,8 @@ function StatsView({ athlete, cahiers }) {
         MES STATISTIQUES
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         {[
           { l: 'SÉANCES FAITES', v: totalDone, c: C.green },
           { l: 'EXERCICES SUIVIS', v: exoNames.length, c: C.blue },
@@ -612,15 +637,16 @@ function StatsView({ athlete, cahiers }) {
         ))}
       </div>
 
+      {/* Progression globale */}
       {totalPrescribed > 0 && (
-        <div style={{ background: C.card, borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>
+        <div style={{ background: C.card, borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>PROGRESSION GLOBALE</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: C.yellow }}>{totalDone}/{totalPrescribed}</span>
           </div>
           <div style={{ background: C.border, borderRadius: 4, height: 6, overflow: 'hidden' }}>
             <div style={{ background: C.green, height: '100%', borderRadius: 4,
-              width: `${Math.min(100, (totalDone / totalPrescribed) * 100)}%`, transition: 'width .5s ease' }} />
+              width: `${Math.min(100,(totalDone/totalPrescribed)*100)}%`, transition: 'width .5s ease' }} />
           </div>
         </div>
       )}
@@ -630,91 +656,156 @@ function StatsView({ athlete, cahiers }) {
           border: `1px dashed ${C.border}` }}>
           <div style={{ fontSize: 36, marginBottom: 10 }}>📈</div>
           <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.5 }}>
-            Remplis ton cahier d'entraînement<br />
+            Remplis ton cahier d'entraînement<br/>
             <span style={{ fontSize: 12 }}>pour voir tes statistiques ici.</span>
           </div>
         </div>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 16 }}>
-            <button onClick={() => setSelExo(null)}
-              style={{ flexShrink: 0, background: !selExo ? C.yellow : C.card,
-                color: !selExo ? C.navy : C.muted, border: `1px solid ${!selExo ? C.yellow : C.border}`,
-                borderRadius: 6, padding: '5px 12px', fontSize: 10, fontWeight: 800, cursor: 'pointer', letterSpacing: 1 }}>
-              TOUS
-            </button>
-            {exoNames.map(n => (
-              <button key={n} onClick={() => setSelExo(selExo === n ? null : n)}
-                style={{ flexShrink: 0, background: selExo === n ? C.yellow : C.card,
-                  color: selExo === n ? C.navy : C.muted, border: `1px solid ${selExo === n ? C.yellow : C.border}`,
-                  borderRadius: 6, padding: '5px 12px', fontSize: 10, fontWeight: 800,
-                  cursor: 'pointer', letterSpacing: 1, whiteSpace: 'nowrap' }}>
-                {n}
-              </button>
-            ))}
+          {/* Sélecteur exercice */}
+          <div style={{ background: C.card, borderRadius: 8, padding: '12px 14px', marginBottom: 16,
+            border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>
+              VOIR LES STATS DE
+            </div>
+            <select
+              value={selExo}
+              onChange={e => setSelExo(e.target.value)}
+              style={{ width: '100%', background: '#111', border: `1px solid ${C.yellow}`,
+                borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 700,
+                color: C.white, outline: 'none',
+                fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif" }}>
+              <option value="__tous__">📊 Vue globale (toutes séances)</option>
+              <optgroup label="── Exercices ──">
+                {exoNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </optgroup>
+            </select>
           </div>
 
-          {(selExo ? [selExo] : exoNames).map(nom => {
-            const data = progressData[nom]
-            if (!data || data.length === 0) return null
-            const last = data[data.length - 1]
+          {/* Graphique volume */}
+          <div style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
+            marginBottom: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.white, marginBottom: 2 }}>
+              {selExo === '__tous__' ? 'Volume global' : selExo}
+            </div>
+            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>
+              VOLUME PAR SÉANCE (kg)
+            </div>
+            <StatLineChart data={displayData} field="vol" color={C.blue} yMax={null} />
+          </div>
+
+          {/* Graphique RPE */}
+          <div style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
+            marginBottom: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>
+              INTENSITÉ RPE (1–10)
+            </div>
+            <StatLineChart data={displayData} field="rpe" color={C.red} yMax={10} yMin={0} />
+          </div>
+
+          {/* Dernier record */}
+          {selExo !== '__tous__' && progressData[selExo]?.length > 0 && (() => {
+            const last = progressData[selExo][progressData[selExo].length - 1]
+            const first = progressData[selExo][0]
+            const volDiff = first.vol > 0 ? Math.round(((last.vol - first.vol)/first.vol)*100) : null
             return (
-              <div key={nom} style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
-                marginBottom: 12, border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 4 }}>{nom}</div>
-                <div style={{ fontSize: 10, color: C.muted, marginBottom: 12 }}>
-                  {data.length} séance{data.length > 1 ? 's' : ''}
+              <div style={{ background: C.card, borderRadius: 8, padding: '12px 14px',
+                border: `1px solid ${C.border}`, marginBottom: 12 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>
+                  RÉSUMÉ — {selExo}
                 </div>
-
-                <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>
-                  VOLUME PAR SÉANCE (kg)
-                </div>
-                <MiniBar data={data} field="vol" color={C.blue} />
-
-                {last.rpeMoyenSeance && (
-                  <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: 11, color: C.muted }}>
-                      Intensité moy. séance :
-                      <span style={{ marginLeft: 5, fontWeight: 800,
-                        color: last.rpeMoyenSeance >= 9 ? C.red : last.rpeMoyenSeance >= 7 ? C.yellow : C.green }}>
-                        {last.rpeMoyenSeance}/10
-                      </span>
-                    </div>
-                    {last.rpe && (
-                      <div style={{ fontSize: 11, color: C.muted }}>
-                        Intensité exercice :
-                        <span style={{ marginLeft: 5, fontWeight: 800,
-                          color: last.rpe >= 9 ? C.red : last.rpe >= 7 ? C.yellow : C.green }}>
-                          {last.rpe}/10
-                        </span>
-                      </div>
-                    )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.blue }}>{Math.round(last.vol)}<span style={{fontSize:10}}> kg</span></div>
+                    <div style={{ fontSize: 9, color: C.muted }}>DERNIER VOLUME</div>
                   </div>
-                )}
+                  {last.rpe && (
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800,
+                        color: last.rpe >= 9 ? C.red : last.rpe >= 7 ? C.yellow : C.green }}>
+                        {last.rpe}<span style={{fontSize:10}}>/10</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: C.muted }}>DERNIER RPE</div>
+                    </div>
+                  )}
+                  {volDiff !== null && (
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800,
+                        color: volDiff >= 0 ? C.green : C.red }}>
+                        {volDiff >= 0 ? '+' : ''}{volDiff}%
+                      </div>
+                      <div style={{ fontSize: 9, color: C.muted }}>ÉVOLUTION</div>
+                    </div>
+                  )}
+                </div>
               </div>
             )
-          })}
+          })()}
         </>
       )}
     </div>
   )
 }
 
-function MiniBar({ data, field, color }) {
-  const vals = data.map(d => d[field] || 0)
-  const max = Math.max(...vals) || 1
+// Courbe SVG simple
+function StatLineChart({ data, field, color, yMax = null, yMin = 0 }) {
+  const vals = data.map(d => d[field] != null ? d[field] : null)
+  const validVals = vals.filter(v => v !== null)
+  if (validVals.length === 0) return (
+    <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: C.muted, fontSize: 11 }}>Pas encore de données</div>
+  )
+  const maxV = yMax !== null ? yMax : Math.max(...validVals) * 1.1 || 1
+  const minV = yMin !== null ? yMin : Math.min(...validVals) * 0.9
+  const W = 300, H = 80, PAD = 6
+  const n = data.length
+  const x = (i) => PAD + (i / Math.max(n - 1, 1)) * (W - PAD * 2)
+  const y = (v) => H - PAD - ((v - minV) / (maxV - minV || 1)) * (H - PAD * 2)
+
+  const points = vals.map((v, i) => v !== null ? { x: x(i), y: y(v), v, label: data[i].label } : null)
+  const linePoints = points.filter(p => p !== null)
+
+  const pathD = linePoints.length > 1
+    ? linePoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+    : ''
+
+  // Zone fill
+  const fillD = linePoints.length > 1
+    ? `${pathD} L${linePoints[linePoints.length-1].x.toFixed(1)},${(H-PAD)} L${linePoints[0].x.toFixed(1)},${(H-PAD)} Z`
+    : ''
+
   return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 56 }}>
-      {data.map((d, i) => (
-        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <div style={{ fontSize: 8, color, fontWeight: 700 }}>{vals[i] > 0 ? Math.round(vals[i]) : ''}</div>
-          <div style={{ width: '100%', background: color, borderRadius: '2px 2px 0 0',
-            height: `${Math.max(3, (vals[i] / max) * 36)}px`,
-            opacity: 0.5 + (0.5 * i / Math.max(1, data.length - 1)) }} />
-          <div style={{ fontSize: 7, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden',
-            textOverflow: 'ellipsis', maxWidth: 30, textAlign: 'center' }}>{d.label}</div>
-        </div>
-      ))}
+    <div style={{ overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${W} ${H + 16}`} width="100%" style={{ display: 'block', minWidth: `${Math.max(200, n * 28)}px` }}>
+        {/* Lignes grille */}
+        {[0.25, 0.5, 0.75, 1].map(t => (
+          <line key={t} x1={PAD} x2={W-PAD}
+            y1={PAD + (1-t)*(H-PAD*2)} y2={PAD + (1-t)*(H-PAD*2)}
+            stroke="#222" strokeWidth="1" />
+        ))}
+        {/* Zone fill */}
+        {fillD && <path d={fillD} fill={color} opacity="0.08" />}
+        {/* Ligne */}
+        {pathD && <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
+        {/* Points */}
+        {linePoints.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="3" fill={color} />
+        ))}
+        {/* Valeurs */}
+        {linePoints.map((p, i) => (
+          <text key={i} x={p.x} y={p.y - 6} textAnchor="middle"
+            fontSize="7" fill={color} fontWeight="700">
+            {field === 'rpe' ? p.v : Math.round(p.v)}
+          </text>
+        ))}
+        {/* Labels axe X */}
+        {data.map((d, i) => (
+          <text key={i} x={x(i)} y={H + 12} textAnchor="middle"
+            fontSize="6.5" fill="#444">
+            {d.label}
+          </text>
+        ))}
+      </svg>
     </div>
   )
 }
