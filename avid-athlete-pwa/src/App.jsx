@@ -218,8 +218,11 @@ export default function App() {
 
 // ── Programme View ────────────────────────────────────────────────────────────
 function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
-  const [blocIdx, setBlocIdx] = useState(0)
-  const [semIdx, setSemIdx] = useState(0)
+  const [blocIdx, setBlocIdx] = useState(() => Math.max(0, (athlete?.blocs?.length || 1) - 1))
+  const [semIdx, setSemIdx] = useState(() => {
+    const lastBloc = athlete?.blocs?.[Math.max(0, (athlete?.blocs?.length || 1) - 1)]
+    return Math.max(0, (lastBloc?.semaines?.length || 1) - 1)
+  })
   const [openSea, setOpenSea] = useState(null)
 
   function dupliquerSemaine(blocI, semI) {
