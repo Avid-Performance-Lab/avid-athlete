@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { db } from './firebase.js'
 import { doc, onSnapshot, collection, query, where, setDoc } from 'firebase/firestore'
 
+const uid = () => Math.random().toString(36).slice(2, 9)
+
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
   bg: '#0A0A0A', panel: '#141414', card: '#1C1C1C', border: '#262626',
@@ -126,6 +128,26 @@ export default function App() {
     catch (e) { notify('⚠ Erreur sauvegarde', C.red) }
   }
 
+  async function saveAthlete(updatedAthlete) {
+    try {
+      // Flatten series before saving (same logic as dashboard)
+      const clean = JSON.parse(JSON.stringify(updatedAthlete))
+      clean.blocs?.forEach(bloc => {
+        bloc.semaines?.forEach(sem => {
+          sem.seances?.forEach(sea => {
+            sea.exercices?.forEach(ex => {
+              ex.series = (ex.series || []).map(sr => {
+                if (Array.isArray(sr)) return { reps: sr[1] ?? 0, kg: sr[0] ?? 0 }
+                return { reps: parseFloat(sr.reps) || 0, kg: parseFloat(sr.kg) || 0 }
+              })
+            })
+          })
+        })
+      })
+      await setDoc(doc(db, 'athletes', updatedAthlete.id), clean)
+    } catch (e) { notify('⚠ Erreur sauvegarde', C.red) }
+  }
+
   if (loading) return <LoadingScreen />
   if (error === 'no_id') return <ErrorScreen msg="Lien invalide" sub="Demande un nouveau lien à ton coach." />
   if (error === 'not_found') return <ErrorScreen msg="Athlète introuvable" sub="Ce lien ne correspond à aucun profil." />
@@ -161,7 +183,7 @@ export default function App() {
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', paddingBottom: 80 }}>
         {tab === 'profil'    && <ProfilView athlete={athlete} cahiers={cahiers} />}
-        {tab === 'programme' && <ProgrammeView athlete={athlete} cahiers={cahiers} saveCahier={saveCahier} notify={notify} />}
+        {tab === 'programme' && <ProgrammeView athlete={athlete} cahiers={cahiers} saveCahier={saveCahier} notify={notify} saveAthlete={saveAthlete} />}
         {tab === 'stats'     && <StatsView athlete={athlete} cahiers={cahiers} />}
         {tab === 'nutrition' && <NutritionView athleteId={athleteId} nutri={nutri} saveNutri={saveNutri} notify={notify} />}
       </div>
@@ -195,10 +217,60 @@ export default function App() {
 }
 
 // ── Programme View ────────────────────────────────────────────────────────────
-function ProgrammeView({ athlete, cahiers, saveCahier, notify }) {
+function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
   const [blocIdx, setBlocIdx] = useState(0)
   const [semIdx, setSemIdx] = useState(0)
   const [openSea, setOpenSea] = useState(null)
+
+  function dupliquerSemaine(blocI, semI) {
+    const bloc = athlete.blocs[blocI]
+    const sem = bloc.semaines[semI]
+    // Copie avec structure prescrite, cahier vide (nouvelles IDs)
+    const newSem = JSON.parse(JSON.stringify(sem))
+    newSem.id = uid()
+    newSem.label = sem.label + ' (copie)'
+    newSem.seances = newSem.seances.map(sea => ({
+      ...sea,
+      id: uid(),
+      exercices: sea.exercices.map(ex => ({
+        ...ex,
+        id: uid(),
+        // Garder séries prescrites, vider le cahier
+        series: ex.series.map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
+      }))
+    }))
+    const updated = JSON.parse(JSON.stringify(athlete))
+    updated.blocs[blocI].semaines.push(newSem)
+    saveAthlete(updated)
+    notify('✓ Semaine dupliquée à la fin du programme', C.green)
+    // Naviguer vers la nouvelle semaine
+    setTimeout(() => setSemIdx(updated.blocs[blocI].semaines.length - 1), 300)
+  }
+
+  function dupliquerBloc(blocI) {
+    const bloc = athlete.blocs[blocI]
+    const newBloc = JSON.parse(JSON.stringify(bloc))
+    newBloc.id = uid()
+    newBloc.label = bloc.label + ' (copie)'
+    newBloc.semaines = newBloc.semaines.map(sem => ({
+      ...sem,
+      id: uid(),
+      seances: sem.seances.map(sea => ({
+        ...sea,
+        id: uid(),
+        exercices: sea.exercices.map(ex => ({
+          ...ex,
+          id: uid(),
+          series: ex.series.map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
+        }))
+      }))
+    }))
+    const updated = JSON.parse(JSON.stringify(athlete))
+    updated.blocs.push(newBloc)
+    saveAthlete(updated)
+    notify('✓ Bloc dupliqué à la fin du programme', C.green)
+    setTimeout(() => { setBlocIdx(updated.blocs.length - 1); setSemIdx(0) }, 300)
+  }
 
   if (!athlete?.blocs?.length) return (
     <div style={{ padding: 32, textAlign: 'center' }}>
@@ -241,6 +313,15 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify }) {
         ))}
       </div>
 
+      {athlete.autonomie && (
+        <button onClick={() => dupliquerBloc(blocIdx)}
+          style={{ marginBottom: 14, background: 'transparent', border: `1px dashed ${C.green}`,
+            borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
+            color: C.green, cursor: 'pointer', letterSpacing: 1 }}>
+          + Dupliquer ce bloc
+        </button>
+      )}
+
       {bloc?.semaines?.length > 0 && (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>SEMAINE</div>
@@ -256,6 +337,15 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify }) {
               </button>
             ))}
           </div>
+          {athlete.autonomie && (
+            <button onClick={() => dupliquerSemaine(blocIdx, semIdx)}
+              style={{ marginTop: 4, marginBottom: 4, background: 'transparent',
+                border: `1px dashed ${C.yellow}`, borderRadius: 6,
+                padding: '5px 14px', fontSize: 11, fontWeight: 700,
+                color: C.yellow, cursor: 'pointer', letterSpacing: 1 }}>
+              + Dupliquer cette semaine
+            </button>
+          )}
         </>
       )}
 
