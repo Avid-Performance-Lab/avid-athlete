@@ -44,27 +44,32 @@ function AvidLogo({ height = 28 }){
 }
 
 // ── Global styles ─────────────────────────────────────────────────────────────
-function makeGlobalCSS(theme) {
-  return `
+const STATIC_CSS = `
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin: 0; background: ${theme.bg}; font-family: 'Barlow Condensed','Arial Narrow',sans-serif;
-    color: ${theme.text}; overscroll-behavior: none; -webkit-font-smoothing: antialiased; }
+  body { margin: 0; font-family: 'Barlow Condensed','Arial Narrow',sans-serif;
+    overscroll-behavior: none; -webkit-font-smoothing: antialiased; }
   input, select, textarea { font-family: inherit; }
   ::-webkit-scrollbar { width: 0; height: 0; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
   @keyframes spin { to { transform: rotate(360deg); } }
   .fade-in { animation: fadeIn .25s ease forwards; }
 `
-}
 
 function InjectStyles({ theme }) {
   useEffect(() => {
-    const el = document.createElement('style')
-    el.textContent = makeGlobalCSS(theme)
-    document.head.appendChild(el)
+    // Injecter CSS statique une seule fois
+    let el = document.getElementById('avid-static-css')
+    if (!el) {
+      el = document.createElement('style')
+      el.id = 'avid-static-css'
+      el.textContent = STATIC_CSS
+      document.head.appendChild(el)
+    }
+  }, [])
+  // Appliquer les couleurs du thème sur le body directement
+  useEffect(() => {
     document.body.style.background = theme.bg
     document.body.style.color = theme.text
-    return () => el.remove()
   }, [theme])
   return null
 }
@@ -72,7 +77,11 @@ function InjectStyles({ theme }) {
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [dark, setDark] = useState(() => {
-    try { return localStorage.getItem('avid_theme') !== 'light' } catch(e) { return true }
+    try {
+      const saved = localStorage.getItem('avid_theme')
+      if (saved === 'light') return false
+      return true // sombre par défaut
+    } catch(e) { return true }
   })
   const theme = dark ? DARK_THEME : LIGHT_THEME
   C = theme
@@ -234,19 +243,19 @@ export default function App() {
 
   return (
     <ThemeCtx.Provider value={theme}>
-    <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: theme.bg, color: theme.text, display: 'flex', flexDirection: 'column' }}>
       <InjectStyles theme={theme} />
 
       {/* Header */}
-      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`,
+      <div style={{ background: theme.panel, borderBottom: `1px solid ${theme.border}`,
         padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0, zIndex: 50 }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: theme.muted, letterSpacing: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             AVID PERFORMANCE LAB
-            {isSolo && <span style={{ background: 'rgba(242,196,76,.12)', border: '1px solid rgba(242,196,76,.3)', color: C.yellow, fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 3 }}>SOLO</span>}
+            {isSolo && <span style={{ background: 'rgba(242,196,76,.12)', border: '1px solid rgba(242,196,76,.3)', color: theme.yellow, fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 3 }}>SOLO</span>}
           </div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: C.white, letterSpacing: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: theme.white, letterSpacing: 1 }}>
             {athlete?.prenom} {athlete?.nom}
           </div>
         </div>
@@ -279,7 +288,7 @@ export default function App() {
 
       {/* Bottom nav */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
-        background: C.panel, borderTop: `1px solid ${C.border}`,
+        background: theme.panel, borderTop: `1px solid ${theme.border}`,
         display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -287,15 +296,15 @@ export default function App() {
               cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
             <span style={{ fontSize: 20, filter: tab === t.id ? 'none' : 'grayscale(1) opacity(.5)' }}>{t.icon}</span>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1,
-              color: tab === t.id ? C.yellow : C.muted }}>{t.label.toUpperCase()}</span>
-            {tab === t.id && <div style={{ width: 20, height: 2, background: C.yellow, borderRadius: 1 }} />}
+              color: tab === t.id ? theme.yellow : theme.muted }}>{t.label.toUpperCase()}</span>
+            {tab === t.id && <div style={{ width: 20, height: 2, background: theme.yellow, borderRadius: 1 }} />}
           </button>
         ))}
       </div>
 
       {toast && (
         <div style={{ position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
-          background: toast.color, color: C.white, padding: '10px 20px', borderRadius: 8,
+          background: toast.color, color: theme.white, padding: '10px 20px', borderRadius: 8,
           fontSize: 13, fontWeight: 700, letterSpacing: 1, zIndex: 999,
           boxShadow: '0 4px 24px rgba(0,0,0,.6)', animation: 'fadeIn .2s ease' }}>
           {toast.msg}
