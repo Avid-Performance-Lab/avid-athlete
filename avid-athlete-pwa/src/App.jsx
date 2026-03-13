@@ -74,24 +74,24 @@ export default function App() {
     const idFromUrl = params.get('id')
     const isSoloUrl = window.location.pathname.includes('/solo') || params.get('mode') === 'solo'
 
-    // Mode solo
+    // ⚡ Mode solo — PRIORITAIRE sur tout le reste
     if (isSoloUrl) {
       setIsSolo(true)
       try {
         const savedSoloId = localStorage.getItem('avid_solo_id')
         if (savedSoloId) { setAthleteId(savedSoloId); return }
       } catch(e) {}
-      // Pas encore de profil solo → afficher l'écran de création
       setSoloSetup(true); setLoading(false); return
     }
 
-    // Mode coach (comportement actuel)
+    // Mode coach — ?id=xxx en priorité, sinon localStorage coach
     if (idFromUrl) {
       try { localStorage.setItem('avid_athlete_id', idFromUrl) } catch(e) {}
       setAthleteId(idFromUrl); return
     }
     try {
       const saved = localStorage.getItem('avid_athlete_id')
+      // Ne pas utiliser le localStorage coach si on est en mode solo
       if (saved) { setAthleteId(saved); return }
     } catch(e) {}
     setError('no_id'); setLoading(false)
