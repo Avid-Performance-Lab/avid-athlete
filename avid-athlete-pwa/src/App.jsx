@@ -1,25 +1,24 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect } from 'react'
 import { db } from './firebase.js'
 import { doc, onSnapshot, collection, query, where, setDoc } from 'firebase/firestore'
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const DARK_THEME = {
+const DARK = {
   bg: '#0A0A0A', panel: '#141414', card: '#1C1C1C', border: '#262626',
   red: '#EA4335', yellow: '#F2C94C', green: '#27AE60', blue: '#2F80ED',
   purple: '#9B51E0', navy: '#00194C', orange: '#F2994A',
-  text: '#E8E8E8', muted: '#777', white: '#FFF',
+  text: '#E8E8E8', muted: '#666', white: '#FFF',
 }
-const LIGHT_THEME = {
-  bg: '#F4F4F4', panel: '#FFFFFF', card: '#FFFFFF', border: '#D8D8D8',
-  red: '#D93025', yellow: '#C49500', green: '#1E8C45', blue: '#1A6BC7',
-  purple: '#7B3EBF', navy: '#00194C', orange: '#C97000',
-  text: '#1A1A1A', muted: '#777', white: '#FFFFFF',
+const LIGHT = {
+  bg: '#F2F2F2', panel: '#FFFFFF', card: '#FAFAFA', border: '#E0E0E0',
+  red: '#C62828', yellow: '#B8860B', green: '#1B6E3A', blue: '#1558B0',
+  purple: '#6A1B9A', navy: '#00194C', orange: '#BF6000',
+  text: '#1A1A1A', muted: '#888', white: '#FFFFFF',
 }
-const ThemeCtx = createContext(DARK_THEME)
-function useTheme(){ return useContext(ThemeCtx) }
-let C = DARK_THEME
+// C est un objet global mutable — mis à jour avant chaque render dans App()
+const C = Object.assign({}, DARK)
 
 const CAT_COLORS = {
   JAMBES:      { bg: '#F2C94C', text: '#1a1000' },
@@ -35,8 +34,7 @@ function catColor(label = '') {
 }
 
 // ── Logo AVID ─────────────────────────────────────────────────────────────────
-function AvidLogo({ height = 28 }){
-  const C = useTheme()
+function AvidLogo({ height = 28 }) {
   return (
     <img src="/icon_avid_A.svg" alt="AVID Performance Lab"
       style={{ height, width: 'auto', objectFit: 'contain' }} />
@@ -55,22 +53,13 @@ const STATIC_CSS = `
   .fade-in { animation: fadeIn .25s ease forwards; }
 `
 
-function InjectStyles({ theme }) {
+function InjectStyles() {
   useEffect(() => {
-    // Injecter CSS statique une seule fois
-    let el = document.getElementById('avid-static-css')
-    if (!el) {
-      el = document.createElement('style')
-      el.id = 'avid-static-css'
-      el.textContent = STATIC_CSS
-      document.head.appendChild(el)
-    }
+    const el = document.createElement('style')
+    el.textContent = STATIC_CSS
+    document.head.appendChild(el)
+    return () => el.remove()
   }, [])
-  // Appliquer les couleurs du thème sur le body directement
-  useEffect(() => {
-    document.body.style.background = theme.bg
-    document.body.style.color = theme.text
-  }, [theme])
   return null
 }
 
@@ -78,16 +67,21 @@ function InjectStyles({ theme }) {
 export default function App() {
   const [dark, setDark] = useState(() => {
     try {
-      const saved = localStorage.getItem('avid_theme')
-      if (saved === 'light') return false
-      return true // sombre par défaut
+      const s = localStorage.getItem('avid_theme')
+      return s !== 'light' // sombre par défaut
     } catch(e) { return true }
   })
-  const theme = dark ? DARK_THEME : LIGHT_THEME
-  C = theme
+
+  // Mettre à jour C AVANT le reste du render
+  Object.assign(C, dark ? DARK : LIGHT)
+
+  // Appliquer sur le body
   useEffect(() => {
+    document.body.style.background = C.bg
+    document.body.style.color = C.text
     try { localStorage.setItem('avid_theme', dark ? 'dark' : 'light') } catch(e) {}
   }, [dark])
+
   const [athleteId, setAthleteId] = useState(null)
   const [athlete, setAthlete] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -242,35 +236,35 @@ export default function App() {
   ]
 
   return (
-    <ThemeCtx.Provider value={theme}>
-    <div style={{ minHeight: '100vh', background: theme.bg, color: theme.text, display: 'flex', flexDirection: 'column' }}>
-      <InjectStyles theme={theme} />
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, display: 'flex', flexDirection: 'column' }}>
+      <InjectStyles />
 
       {/* Header */}
-      <div style={{ background: theme.panel, borderBottom: `1px solid ${theme.border}`,
+      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`,
         padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0, zIndex: 50 }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: theme.muted, letterSpacing: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             AVID PERFORMANCE LAB
-            {isSolo && <span style={{ background: 'rgba(242,196,76,.12)', border: '1px solid rgba(242,196,76,.3)', color: theme.yellow, fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 3 }}>SOLO</span>}
+            {isSolo && <span style={{ background: 'rgba(242,196,76,.12)', border: '1px solid rgba(242,196,76,.3)', color: C.yellow, fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 3 }}>SOLO</span>}
           </div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: theme.white, letterSpacing: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.white, letterSpacing: 1 }}>
             {athlete?.prenom} {athlete?.nom}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: online ? theme.green : theme.red }} />
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: online ? C.green : C.red }} />
           <button onClick={() => setDark(d => !d)}
-            title={dark ? 'Passer en mode clair' : 'Passer en mode sombre'}
-            style={{ background: dark ? '#2A2A2A' : '#E0E0E0', border: 'none', borderRadius: 20,
-              width: 40, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center',
-              padding: '0 3px', transition: 'background 0.2s' }}>
-            <div style={{ width: 16, height: 16, borderRadius: '50%',
-              background: dark ? '#F2C94C' : '#FFF',
-              transform: dark ? 'translateX(16px)' : 'translateX(0)',
-              transition: 'transform 0.2s',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>
+            title={dark ? 'Mode clair' : 'Mode sombre'}
+            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 20,
+              width: 42, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center',
+              padding: '0 3px', flexShrink: 0 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%',
+              background: dark ? C.yellow : C.muted,
+              transform: dark ? 'translateX(17px)' : 'translateX(0)',
+              transition: 'transform 0.2s, background 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, lineHeight: 1 }}>
               {dark ? '☀' : '🌙'}
             </div>
           </button>
@@ -288,7 +282,7 @@ export default function App() {
 
       {/* Bottom nav */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
-        background: theme.panel, borderTop: `1px solid ${theme.border}`,
+        background: C.panel, borderTop: `1px solid ${C.border}`,
         display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -296,28 +290,26 @@ export default function App() {
               cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
             <span style={{ fontSize: 20, filter: tab === t.id ? 'none' : 'grayscale(1) opacity(.5)' }}>{t.icon}</span>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1,
-              color: tab === t.id ? theme.yellow : theme.muted }}>{t.label.toUpperCase()}</span>
-            {tab === t.id && <div style={{ width: 20, height: 2, background: theme.yellow, borderRadius: 1 }} />}
+              color: tab === t.id ? C.yellow : C.muted }}>{t.label.toUpperCase()}</span>
+            {tab === t.id && <div style={{ width: 20, height: 2, background: C.yellow, borderRadius: 1 }} />}
           </button>
         ))}
       </div>
 
       {toast && (
         <div style={{ position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
-          background: toast.color, color: theme.white, padding: '10px 20px', borderRadius: 8,
+          background: toast.color, color: C.white, padding: '10px 20px', borderRadius: 8,
           fontSize: 13, fontWeight: 700, letterSpacing: 1, zIndex: 999,
           boxShadow: '0 4px 24px rgba(0,0,0,.6)', animation: 'fadeIn .2s ease' }}>
           {toast.msg}
         </div>
       )}
     </div>
-    </ThemeCtx.Provider>
   )
 }
 
 // ── Programme View ────────────────────────────────────────────────────────────
-function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }){
-  const C = useTheme()
+function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
   const [blocIdx, setBlocIdx] = useState(() => Math.max(0, (athlete?.blocs?.length || 1) - 1))
   const [semIdx, setSemIdx] = useState(() => {
     const lastBloc = athlete?.blocs?.[Math.max(0, (athlete?.blocs?.length || 1) - 1)]
@@ -509,8 +501,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }){
 }
 
 // ── Séance Detail ─────────────────────────────────────────────────────────────
-function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }){
-  const C = useTheme()
+function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }) {
   const [local, setLocal] = useState(() => {
     if (readOnly) return null
     return seance.exercices.map((ex, ei) => {
@@ -746,8 +737,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 }
 
 // ── Stats View ────────────────────────────────────────────────────────────────
-function StatsView({ athlete, cahiers }){
-  const C = useTheme()
+function StatsView({ athlete, cahiers }) {
   const [selExo, setSelExo] = useState('__tous__')
 
   // Construire les données de progression par exercice et par semaine
@@ -943,8 +933,7 @@ function StatsView({ athlete, cahiers }){
 }
 
 // Courbe SVG simple
-function StatLineChart({ data, field, color, yMax = null, yMin = 0 }){
-  const C = useTheme()
+function StatLineChart({ data, field, color, yMax = null, yMin = 0 }) {
   const vals = data.map(d => d[field] != null ? d[field] : null)
   const validVals = vals.filter(v => v !== null)
   if (validVals.length === 0) return (
@@ -1007,8 +996,7 @@ function StatLineChart({ data, field, color, yMax = null, yMin = 0 }){
 }
 
 // ── Nutrition View ────────────────────────────────────────────────────────────
-function NutritionView({ athleteId, nutri, saveNutri, notify }){
-  const C = useTheme()
+function NutritionView({ athleteId, nutri, saveNutri, notify }) {
   const today = new Date().toISOString().slice(0, 10)
   const key = `${athleteId}-${today}`
   const existing = nutri[key]?.data || {}
@@ -1192,8 +1180,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }){
 }
 
 // ── Nutrition History Chart ────────────────────────────────────────────────────
-function NutritionHistory({ nutri }){
-  const C = useTheme()
+function NutritionHistory({ nutri }) {
   const [days, setDays] = useState(7)
 
   // Build sorted history from nutri collection
@@ -1283,8 +1270,7 @@ function NutritionHistory({ nutri }){
   )
 }
 
-function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }){
-  const C = useTheme()
+function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }) {
   const vals = data.map(d => d[field] || 0)
   const max = yMax || Math.max(...vals) || 1
   const min = 0
@@ -1339,8 +1325,7 @@ function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }){
   )
 }
 
-function MultiLineChart({ data, fields }){
-  const C = useTheme()
+function MultiLineChart({ data, fields }) {
   const allVals = fields.flatMap(({ f }) => data.map(d => d[f] || 0))
   const max = Math.max(...allVals) || 1
   const W = 280, H = 70, pad = 16
@@ -1368,8 +1353,7 @@ function MultiLineChart({ data, fields }){
   )
 }
 
-function DateAxis({ data }){
-  const C = useTheme()
+function DateAxis({ data }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, paddingLeft: 2, paddingRight: 2 }}>
       {data.map((d, i) => (
@@ -1385,8 +1369,7 @@ function DateAxis({ data }){
 }
 
 // ── Personal Records ──────────────────────────────────────────────────────────
-function PersonalRecords({ athlete, cahiers }){
-  const C = useTheme()
+function PersonalRecords({ athlete, cahiers }) {
   const prs = {}
   athlete?.blocs?.forEach(bloc => {
     bloc.semaines?.forEach(sem => {
@@ -1452,8 +1435,7 @@ function PersonalRecords({ athlete, cahiers }){
 }
 
 // ── Profil View ───────────────────────────────────────────────────────────────
-function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }){
-  const C = useTheme()
+function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
   if (!athlete) return null
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ prenom: athlete.prenom || '', nom: athlete.nom || '', objectif: athlete.objectif || '', sport: athlete.sport || '', taille: athlete.taille || '', poids: athlete.poids || '', sexe: athlete.sexe || '' })
@@ -1594,8 +1576,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }){
 // ── Loading & Error ───────────────────────────────────────────────────────────
 
 // ── Solo Setup Screen ─────────────────────────────────────────────────────────
-function SoloSetupScreen({ onCreate }){
-  const C = useTheme()
+function SoloSetupScreen({ onCreate }) {
   const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '' })
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
@@ -1741,7 +1722,6 @@ function SoloSetupScreen({ onCreate }){
 }
 
 function LoadingScreen() {
-  const C = useTheme()
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', background: C.bg }}>
@@ -1754,8 +1734,7 @@ function LoadingScreen() {
   )
 }
 
-function ErrorScreen({ msg, sub }){
-  const C = useTheme()
+function ErrorScreen({ msg, sub }) {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', background: C.bg, padding: 32 }}>
