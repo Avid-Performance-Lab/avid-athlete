@@ -66,10 +66,26 @@ export default function App() {
   const [cahiers, setCahiers] = useState({})
   const [nutri, setNutri] = useState({})
   const [toast, setToast] = useState(null)
+  const [isSolo, setIsSolo] = useState(false)
+  const [soloSetup, setSoloSetup] = useState(false) // true = affiche l'écran de création
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const idFromUrl = params.get('id')
+    const isSoloUrl = window.location.pathname.includes('/solo') || params.get('mode') === 'solo'
+
+    // Mode solo
+    if (isSoloUrl) {
+      setIsSolo(true)
+      try {
+        const savedSoloId = localStorage.getItem('avid_solo_id')
+        if (savedSoloId) { setAthleteId(savedSoloId); return }
+      } catch(e) {}
+      // Pas encore de profil solo → afficher l'écran de création
+      setSoloSetup(true); setLoading(false); return
+    }
+
+    // Mode coach (comportement actuel)
     if (idFromUrl) {
       try { localStorage.setItem('avid_athlete_id', idFromUrl) } catch(e) {}
       setAthleteId(idFromUrl); return
@@ -83,7 +99,8 @@ export default function App() {
 
   useEffect(() => {
     if (!athleteId) return
-    const unsub = onSnapshot(doc(db, 'athletes', athleteId), (snap) => {
+    const colName = athleteId.startsWith('solo_') ? 'athletes_solo' : 'athletes'
+    const unsub = onSnapshot(doc(db, colName, athleteId), (snap) => {
       if (snap.exists()) { setAthlete({ id: snap.id, ...snap.data() }); setOnline(true) }
       else setError('not_found')
       setLoading(false)
@@ -130,7 +147,6 @@ export default function App() {
 
   async function saveAthlete(updatedAthlete) {
     try {
-      // Flatten series before saving (same logic as dashboard)
       const clean = JSON.parse(JSON.stringify(updatedAthlete))
       clean.blocs?.forEach(bloc => {
         bloc.semaines?.forEach(sem => {
@@ -144,11 +160,45 @@ export default function App() {
           })
         })
       })
-      await setDoc(doc(db, 'athletes', updatedAthlete.id), clean)
+      const collection_name = isSolo ? 'athletes_solo' : 'athletes'
+      await setDoc(doc(db, collection_name, updatedAthlete.id), clean)
     } catch (e) { notify('⚠ Erreur sauvegarde', C.red) }
   }
 
+  async function createSoloProfil(formData) {
+    const newId = 'solo_' + uid() + uid()
+    const newAthlete = {
+      id: newId,
+      prenom: formData.prenom,
+      nom: formData.nom,
+      objectif: formData.objectif,
+      sport: formData.sport,
+      taille: formData.taille || '',
+      poids: formData.poids || '',
+      sexe: formData.sexe || '',
+      autonomie: true,
+      isSolo: true,
+      createdAt: Date.now(),
+      blocs: [{
+        id: uid(),
+        label: 'Bloc 1',
+        semaines: [{
+          id: uid(),
+          label: 'Semaine 1',
+          seances: []
+        }]
+      }]
+    }
+    try {
+      await setDoc(doc(db, 'athletes_solo', newId), newAthlete)
+      try { localStorage.setItem('avid_solo_id', newId) } catch(e) {}
+      setSoloSetup(false)
+      setAthleteId(newId)
+    } catch(e) { notify('⚠ Erreur création profil', C.red) }
+  }
+
   if (loading) return <LoadingScreen />
+  if (soloSetup) return <SoloSetupScreen onCreate={createSoloProfil} />
   if (error === 'no_id') return <ErrorScreen msg="Lien invalide" sub="Demande un nouveau lien à ton coach." />
   if (error === 'not_found') return <ErrorScreen msg="Athlète introuvable" sub="Ce lien ne correspond à aucun profil." />
   if (error === 'offline') return <ErrorScreen msg="Hors ligne" sub="Vérifie ta connexion et réessaie." />
@@ -169,7 +219,10 @@ export default function App() {
         padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0, zIndex: 50 }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2 }}>AVID PERFORMANCE LAB</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+            AVID PERFORMANCE LAB
+            {isSolo && <span style={{ background: 'rgba(242,196,76,.12)', border: '1px solid rgba(242,196,76,.3)', color: C.yellow, fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 3 }}>SOLO</span>}
+          </div>
           <div style={{ fontSize: 16, fontWeight: 800, color: C.white, letterSpacing: 1 }}>
             {athlete?.prenom} {athlete?.nom}
           </div>
@@ -182,7 +235,7 @@ export default function App() {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', paddingBottom: 80 }}>
-        {tab === 'profil'    && <ProfilView athlete={athlete} cahiers={cahiers} />}
+        {tab === 'profil'    && <ProfilView athlete={athlete} cahiers={cahiers} isSolo={isSolo} saveAthlete={saveAthlete} notify={notify} />}
         {tab === 'programme' && <ProgrammeView athlete={athlete} cahiers={cahiers} saveCahier={saveCahier} notify={notify} saveAthlete={saveAthlete} />}
         {tab === 'stats'     && <StatsView athlete={athlete} cahiers={cahiers} />}
         {tab === 'nutrition' && <NutritionView athleteId={athleteId} nutri={nutri} saveNutri={saveNutri} notify={notify} />}
@@ -1343,8 +1396,18 @@ function PersonalRecords({ athlete, cahiers }) {
 }
 
 // ── Profil View ───────────────────────────────────────────────────────────────
-function ProfilView({ athlete, cahiers }) {
+function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
   if (!athlete) return null
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ prenom: athlete.prenom || '', nom: athlete.nom || '', objectif: athlete.objectif || '', sport: athlete.sport || '', taille: athlete.taille || '', poids: athlete.poids || '', sexe: athlete.sexe || '' })
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleSaveProfil() {
+    const updated = { ...athlete, ...form }
+    await saveAthlete(updated)
+    notify('✓ Profil mis à jour', '#27AE60')
+    setEditing(false)
+  }
 
   const totalSem = athlete.blocs?.reduce((s, b) => s + (b.semaines?.length || 0), 0) || 0
   const totalSea = athlete.blocs?.reduce((s, b) =>
@@ -1369,7 +1432,48 @@ function ProfilView({ athlete, cahiers }) {
           </div>
           {athlete.sport && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{athlete.sport}</div>}
         </div>
+        {isSolo && (
+          <button onClick={() => setEditing(e => !e)}
+            style={{ marginLeft: 'auto', background: editing ? '#333' : 'rgba(242,196,76,.1)', border: '1px solid rgba(242,196,76,.3)', borderRadius: 6, color: '#F2C94C', fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: '6px 12px', cursor: 'pointer', flexShrink: 0 }}>
+            {editing ? '✕ Annuler' : '✏ Modifier'}
+          </button>
+        )}
       </div>
+
+      {/* Formulaire édition solo */}
+      {editing && (
+        <div className="fade-in" style={{ background: '#141414', borderRadius: 12, padding: '18px 16px', border: '1px solid rgba(242,196,76,.2)', marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#F2C94C', letterSpacing: 2, marginBottom: 14 }}>MODIFIER LE PROFIL</div>
+          {[
+            { k: 'prenom', l: 'PRÉNOM', ph: 'Prénom' },
+            { k: 'nom', l: 'NOM', ph: 'Nom' },
+            { k: 'objectif', l: 'OBJECTIF', ph: 'Prise de masse, force...' },
+            { k: 'sport', l: 'SPORT', ph: 'Musculation, CrossFit...' },
+          ].map(({ k, l, ph }) => (
+            <div key={k} style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>{l}</div>
+              <input value={form[k]} onChange={e => setF(k, e.target.value)} placeholder={ph}
+                style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>TAILLE (cm)</div>
+              <input type="number" value={form.taille} onChange={e => setF('taille', e.target.value)}
+                style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>POIDS (kg)</div>
+              <input type="number" value={form.poids} onChange={e => setF('poids', e.target.value)}
+                style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+          <button onClick={handleSaveProfil}
+            style={{ width: '100%', marginTop: 14, background: '#F2C94C', color: '#1a1000', border: 'none', borderRadius: 8, padding: '13px', fontSize: 13, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer' }}>
+            Sauvegarder →
+          </button>
+        </div>
+      )}
 
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
@@ -1431,6 +1535,153 @@ function ProfilView({ athlete, cahiers }) {
 }
 
 // ── Loading & Error ───────────────────────────────────────────────────────────
+
+// ── Solo Setup Screen ─────────────────────────────────────────────────────────
+function SoloSetupScreen({ onCreate }) {
+  const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '' })
+  const [step, setStep] = useState(1)
+  const [saving, setSaving] = useState(false)
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleCreate() {
+    if (!form.prenom.trim()) return
+    setSaving(true)
+    await onCreate(form)
+  }
+
+  const inputStyle = {
+    width: '100%', background: '#1a1a1a', border: '1px solid #333',
+    borderRadius: 8, padding: '13px 14px', color: '#fff',
+    fontSize: 15, fontWeight: 600, outline: 'none',
+    fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif",
+    boxSizing: 'border-box',
+  }
+  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 6, display: 'block' }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ background: '#141414', borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 28, width: 'auto' }} />
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2 }}>AVID PERFORMANCE LAB</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#F2C94C', letterSpacing: 1 }}>MODE SOLO</div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, padding: '32px 20px', maxWidth: 480, margin: '0 auto', width: '100%' }}>
+        {/* Progress */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 32 }}>
+          {[1,2].map(s => (
+            <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s <= step ? '#F2C94C' : '#222' }} />
+          ))}
+        </div>
+
+        {step === 1 && (
+          <div className="fade-in">
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+              Crée ton profil
+            </div>
+            <div style={{ fontSize: 13, color: '#555', marginBottom: 32, lineHeight: 1.6 }}>
+              Ces infos sont stockées dans ton app. Personne d'autre n'y a accès.
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>PRÉNOM *</label>
+                <input style={inputStyle} placeholder="Ton prénom" value={form.prenom}
+                  onChange={e => set('prenom', e.target.value)} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>NOM</label>
+                <input style={inputStyle} placeholder="Ton nom" value={form.nom}
+                  onChange={e => set('nom', e.target.value)} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>OBJECTIF PRINCIPAL</label>
+              <input style={inputStyle} placeholder="Ex: Prise de masse, force, endurance..." value={form.objectif}
+                onChange={e => set('objectif', e.target.value)} />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>SPORT / DISCIPLINE</label>
+              <input style={inputStyle} placeholder="Ex: Musculation, CrossFit, Course..." value={form.sport}
+                onChange={e => set('sport', e.target.value)} />
+            </div>
+
+            <button
+              onClick={() => form.prenom.trim() && setStep(2)}
+              disabled={!form.prenom.trim()}
+              style={{ width: '100%', marginTop: 8, background: form.prenom.trim() ? '#F2C94C' : '#222',
+                color: form.prenom.trim() ? '#1a1000' : '#444', border: 'none', borderRadius: 8,
+                padding: '15px', fontSize: 14, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase',
+                cursor: form.prenom.trim() ? 'pointer' : 'not-allowed', transition: 'all .2s' }}>
+              Suivant →
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="fade-in">
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+              Infos physiques
+            </div>
+            <div style={{ fontSize: 13, color: '#555', marginBottom: 32, lineHeight: 1.6 }}>
+              Optionnel — utile pour le suivi de ta progression.
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>TAILLE (cm)</label>
+                <input style={inputStyle} type="number" placeholder="178" value={form.taille}
+                  onChange={e => set('taille', e.target.value)} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>POIDS (kg)</label>
+                <input style={inputStyle} type="number" placeholder="80" value={form.poids}
+                  onChange={e => set('poids', e.target.value)} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={labelStyle}>SEXE</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {['Homme', 'Femme', 'Autre'].map(s => (
+                  <button key={s} onClick={() => set('sexe', s)}
+                    style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: '1px solid',
+                      borderColor: form.sexe === s ? '#F2C94C' : '#333',
+                      background: form.sexe === s ? 'rgba(242,196,76,.1)' : '#1a1a1a',
+                      color: form.sexe === s ? '#F2C94C' : '#555',
+                      fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all .2s' }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setStep(1)}
+                style={{ flex: 1, background: 'none', border: '1px solid #333', borderRadius: 8,
+                  color: '#555', padding: '15px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                ← Retour
+              </button>
+              <button onClick={handleCreate} disabled={saving}
+                style={{ flex: 2, background: '#F2C94C', color: '#1a1000', border: 'none', borderRadius: 8,
+                  padding: '15px', fontSize: 14, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase',
+                  cursor: 'pointer', opacity: saving ? .6 : 1 }}>
+                {saving ? 'Création...' : 'Commencer →'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function LoadingScreen() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
