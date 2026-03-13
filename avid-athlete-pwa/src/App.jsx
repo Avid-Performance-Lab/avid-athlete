@@ -1,16 +1,25 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, createContext, useContext } from 'react'
 import { db } from './firebase.js'
 import { doc, onSnapshot, collection, query, where, setDoc } from 'firebase/firestore'
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const C = {
+const DARK_THEME = {
   bg: '#0A0A0A', panel: '#141414', card: '#1C1C1C', border: '#262626',
   red: '#EA4335', yellow: '#F2C94C', green: '#27AE60', blue: '#2F80ED',
   purple: '#9B51E0', navy: '#00194C', orange: '#F2994A',
-  text: '#E8E8E8', muted: '#555', white: '#FFF',
+  text: '#E8E8E8', muted: '#777', white: '#FFF',
 }
+const LIGHT_THEME = {
+  bg: '#F4F4F4', panel: '#FFFFFF', card: '#FFFFFF', border: '#D8D8D8',
+  red: '#D93025', yellow: '#C49500', green: '#1E8C45', blue: '#1A6BC7',
+  purple: '#7B3EBF', navy: '#00194C', orange: '#C97000',
+  text: '#1A1A1A', muted: '#777', white: '#FFFFFF',
+}
+const ThemeCtx = createContext(DARK_THEME)
+function useTheme(){ return useContext(ThemeCtx) }
+let C = DARK_THEME
 
 const CAT_COLORS = {
   JAMBES:      { bg: '#F2C94C', text: '#1a1000' },
@@ -26,7 +35,8 @@ function catColor(label = '') {
 }
 
 // ── Logo AVID ─────────────────────────────────────────────────────────────────
-function AvidLogo({ height = 28 }) {
+function AvidLogo({ height = 28 }{
+  const C = useTheme()
   return (
     <img src="/icon_avid_A.svg" alt="AVID Performance Lab"
       style={{ height, width: 'auto', objectFit: 'contain' }} />
@@ -34,29 +44,41 @@ function AvidLogo({ height = 28 }) {
 }
 
 // ── Global styles ─────────────────────────────────────────────────────────────
-const GLOBAL_CSS = `
+function makeGlobalCSS(theme) {
+  return `
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin: 0; background: ${C.bg}; font-family: 'Barlow Condensed','Arial Narrow',sans-serif;
-    color: ${C.text}; overscroll-behavior: none; -webkit-font-smoothing: antialiased; }
+  body { margin: 0; background: ${theme.bg}; font-family: 'Barlow Condensed','Arial Narrow',sans-serif;
+    color: ${theme.text}; overscroll-behavior: none; -webkit-font-smoothing: antialiased; }
   input, select, textarea { font-family: inherit; }
   ::-webkit-scrollbar { width: 0; height: 0; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
   @keyframes spin { to { transform: rotate(360deg); } }
   .fade-in { animation: fadeIn .25s ease forwards; }
 `
+}
 
-function InjectStyles() {
+function InjectStyles({ theme }) {
   useEffect(() => {
     const el = document.createElement('style')
-    el.textContent = GLOBAL_CSS
+    el.textContent = makeGlobalCSS(theme)
     document.head.appendChild(el)
+    document.body.style.background = theme.bg
+    document.body.style.color = theme.text
     return () => el.remove()
-  }, [])
+  }, [theme])
   return null
 }
 
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function App() {
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem('avid_theme') !== 'light' } catch(e) { return true }
+  })
+  const theme = dark ? DARK_THEME : LIGHT_THEME
+  C = theme
+  useEffect(() => {
+    try { localStorage.setItem('avid_theme', dark ? 'dark' : 'light') } catch(e) {}
+  }, [dark])
   const [athleteId, setAthleteId] = useState(null)
   const [athlete, setAthlete] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -211,8 +233,9 @@ export default function App() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column' }}>
-      <InjectStyles />
+    <ThemeCtx.Provider value={theme}>
+    <div style={{ minHeight: '100vh', background: theme.bg, display: 'flex', flexDirection: 'column' }}>
+      <InjectStyles theme={theme} />
 
       {/* Header */}
       <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`,
@@ -228,7 +251,20 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: online ? C.green : C.red }} />
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: online ? theme.green : theme.red }} />
+          <button onClick={() => setDark(d => !d)}
+            title={dark ? 'Passer en mode clair' : 'Passer en mode sombre'}
+            style={{ background: dark ? '#2A2A2A' : '#E0E0E0', border: 'none', borderRadius: 20,
+              width: 40, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center',
+              padding: '0 3px', transition: 'background 0.2s' }}>
+            <div style={{ width: 16, height: 16, borderRadius: '50%',
+              background: dark ? '#F2C94C' : '#FFF',
+              transform: dark ? 'translateX(16px)' : 'translateX(0)',
+              transition: 'transform 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>
+              {dark ? '☀' : '🌙'}
+            </div>
+          </button>
           <AvidLogo height={28} />
         </div>
       </div>
@@ -266,11 +302,13 @@ export default function App() {
         </div>
       )}
     </div>
+    </ThemeCtx.Provider>
   )
 }
 
 // ── Programme View ────────────────────────────────────────────────────────────
-function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
+function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }{
+  const C = useTheme()
   const [blocIdx, setBlocIdx] = useState(() => Math.max(0, (athlete?.blocs?.length || 1) - 1))
   const [semIdx, setSemIdx] = useState(() => {
     const lastBloc = athlete?.blocs?.[Math.max(0, (athlete?.blocs?.length || 1) - 1)]
@@ -462,7 +500,8 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 }
 
 // ── Séance Detail ─────────────────────────────────────────────────────────────
-function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }) {
+function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }{
+  const C = useTheme()
   const [local, setLocal] = useState(() => {
     if (readOnly) return null
     return seance.exercices.map((ex, ei) => {
@@ -698,7 +737,8 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 }
 
 // ── Stats View ────────────────────────────────────────────────────────────────
-function StatsView({ athlete, cahiers }) {
+function StatsView({ athlete, cahiers }{
+  const C = useTheme()
   const [selExo, setSelExo] = useState('__tous__')
 
   // Construire les données de progression par exercice et par semaine
@@ -894,7 +934,8 @@ function StatsView({ athlete, cahiers }) {
 }
 
 // Courbe SVG simple
-function StatLineChart({ data, field, color, yMax = null, yMin = 0 }) {
+function StatLineChart({ data, field, color, yMax = null, yMin = 0 }{
+  const C = useTheme()
   const vals = data.map(d => d[field] != null ? d[field] : null)
   const validVals = vals.filter(v => v !== null)
   if (validVals.length === 0) return (
@@ -957,7 +998,8 @@ function StatLineChart({ data, field, color, yMax = null, yMin = 0 }) {
 }
 
 // ── Nutrition View ────────────────────────────────────────────────────────────
-function NutritionView({ athleteId, nutri, saveNutri, notify }) {
+function NutritionView({ athleteId, nutri, saveNutri, notify }{
+  const C = useTheme()
   const today = new Date().toISOString().slice(0, 10)
   const key = `${athleteId}-${today}`
   const existing = nutri[key]?.data || {}
@@ -1141,7 +1183,8 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
 }
 
 // ── Nutrition History Chart ────────────────────────────────────────────────────
-function NutritionHistory({ nutri }) {
+function NutritionHistory({ nutri }{
+  const C = useTheme()
   const [days, setDays] = useState(7)
 
   // Build sorted history from nutri collection
@@ -1231,7 +1274,8 @@ function NutritionHistory({ nutri }) {
   )
 }
 
-function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }) {
+function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }{
+  const C = useTheme()
   const vals = data.map(d => d[field] || 0)
   const max = yMax || Math.max(...vals) || 1
   const min = 0
@@ -1286,7 +1330,8 @@ function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }) {
   )
 }
 
-function MultiLineChart({ data, fields }) {
+function MultiLineChart({ data, fields }{
+  const C = useTheme()
   const allVals = fields.flatMap(({ f }) => data.map(d => d[f] || 0))
   const max = Math.max(...allVals) || 1
   const W = 280, H = 70, pad = 16
@@ -1314,7 +1359,8 @@ function MultiLineChart({ data, fields }) {
   )
 }
 
-function DateAxis({ data }) {
+function DateAxis({ data }{
+  const C = useTheme()
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, paddingLeft: 2, paddingRight: 2 }}>
       {data.map((d, i) => (
@@ -1330,7 +1376,8 @@ function DateAxis({ data }) {
 }
 
 // ── Personal Records ──────────────────────────────────────────────────────────
-function PersonalRecords({ athlete, cahiers }) {
+function PersonalRecords({ athlete, cahiers }{
+  const C = useTheme()
   const prs = {}
   athlete?.blocs?.forEach(bloc => {
     bloc.semaines?.forEach(sem => {
@@ -1396,7 +1443,8 @@ function PersonalRecords({ athlete, cahiers }) {
 }
 
 // ── Profil View ───────────────────────────────────────────────────────────────
-function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
+function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }{
+  const C = useTheme()
   if (!athlete) return null
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ prenom: athlete.prenom || '', nom: athlete.nom || '', objectif: athlete.objectif || '', sport: athlete.sport || '', taille: athlete.taille || '', poids: athlete.poids || '', sexe: athlete.sexe || '' })
@@ -1537,7 +1585,8 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
 // ── Loading & Error ───────────────────────────────────────────────────────────
 
 // ── Solo Setup Screen ─────────────────────────────────────────────────────────
-function SoloSetupScreen({ onCreate }) {
+function SoloSetupScreen({ onCreate }{
+  const C = useTheme()
   const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '' })
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
@@ -1683,6 +1732,7 @@ function SoloSetupScreen({ onCreate }) {
 }
 
 function LoadingScreen() {
+  const C = useTheme()
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', background: C.bg }}>
@@ -1695,7 +1745,8 @@ function LoadingScreen() {
   )
 }
 
-function ErrorScreen({ msg, sub }) {
+function ErrorScreen({ msg, sub }{
+  const C = useTheme()
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', background: C.bg, padding: 32 }}>
