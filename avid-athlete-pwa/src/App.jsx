@@ -35,7 +35,7 @@ function catColor(label = '') {
 }
 
 // ── Logo AVID ─────────────────────────────────────────────────────────────────
-function AvidLogo({ height = 28 }{
+function AvidLogo({ height = 28 }){
   const C = useTheme()
   return (
     <img src="/icon_avid_A.svg" alt="AVID Performance Lab"
@@ -307,7 +307,7 @@ export default function App() {
 }
 
 // ── Programme View ────────────────────────────────────────────────────────────
-function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }{
+function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }){
   const C = useTheme()
   const [blocIdx, setBlocIdx] = useState(() => Math.max(0, (athlete?.blocs?.length || 1) - 1))
   const [semIdx, setSemIdx] = useState(() => {
@@ -500,7 +500,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }{
 }
 
 // ── Séance Detail ─────────────────────────────────────────────────────────────
-function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }{
+function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }){
   const C = useTheme()
   const [local, setLocal] = useState(() => {
     if (readOnly) return null
@@ -737,7 +737,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 }
 
 // ── Stats View ────────────────────────────────────────────────────────────────
-function StatsView({ athlete, cahiers }{
+function StatsView({ athlete, cahiers }){
   const C = useTheme()
   const [selExo, setSelExo] = useState('__tous__')
 
@@ -934,7 +934,7 @@ function StatsView({ athlete, cahiers }{
 }
 
 // Courbe SVG simple
-function StatLineChart({ data, field, color, yMax = null, yMin = 0 }{
+function StatLineChart({ data, field, color, yMax = null, yMin = 0 }){
   const C = useTheme()
   const vals = data.map(d => d[field] != null ? d[field] : null)
   const validVals = vals.filter(v => v !== null)
@@ -998,7 +998,7 @@ function StatLineChart({ data, field, color, yMax = null, yMin = 0 }{
 }
 
 // ── Nutrition View ────────────────────────────────────────────────────────────
-function NutritionView({ athleteId, nutri, saveNutri, notify }{
+function NutritionView({ athleteId, nutri, saveNutri, notify }){
   const C = useTheme()
   const today = new Date().toISOString().slice(0, 10)
   const key = `${athleteId}-${today}`
@@ -1183,7 +1183,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }{
 }
 
 // ── Nutrition History Chart ────────────────────────────────────────────────────
-function NutritionHistory({ nutri }{
+function NutritionHistory({ nutri }){
   const C = useTheme()
   const [days, setDays] = useState(7)
 
@@ -1274,7 +1274,7 @@ function NutritionHistory({ nutri }{
   )
 }
 
-function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }{
+function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }){
   const C = useTheme()
   const vals = data.map(d => d[field] || 0)
   const max = yMax || Math.max(...vals) || 1
@@ -1330,7 +1330,7 @@ function NutriLineChart({ data, field, label, color, unit = '', yMax, zones }{
   )
 }
 
-function MultiLineChart({ data, fields }{
+function MultiLineChart({ data, fields }){
   const C = useTheme()
   const allVals = fields.flatMap(({ f }) => data.map(d => d[f] || 0))
   const max = Math.max(...allVals) || 1
@@ -1359,7 +1359,7 @@ function MultiLineChart({ data, fields }{
   )
 }
 
-function DateAxis({ data }{
+function DateAxis({ data }){
   const C = useTheme()
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, paddingLeft: 2, paddingRight: 2 }}>
@@ -1376,7 +1376,7 @@ function DateAxis({ data }{
 }
 
 // ── Personal Records ──────────────────────────────────────────────────────────
-function PersonalRecords({ athlete, cahiers }{
+function PersonalRecords({ athlete, cahiers }){
   const C = useTheme()
   const prs = {}
   athlete?.blocs?.forEach(bloc => {
@@ -1443,7 +1443,7 @@ function PersonalRecords({ athlete, cahiers }{
 }
 
 // ── Profil View ───────────────────────────────────────────────────────────────
-function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }{
+function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }){
   const C = useTheme()
   if (!athlete) return null
   const [editing, setEditing] = useState(false)
@@ -1585,7 +1585,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }{
 // ── Loading & Error ───────────────────────────────────────────────────────────
 
 // ── Solo Setup Screen ─────────────────────────────────────────────────────────
-function SoloSetupScreen({ onCreate }{
+function SoloSetupScreen({ onCreate }){
   const C = useTheme()
   const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '' })
   const [step, setStep] = useState(1)
@@ -1745,7 +1745,7 @@ function LoadingScreen() {
   )
 }
 
-function ErrorScreen({ msg, sub }{
+function ErrorScreen({ msg, sub }){
   const C = useTheme()
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column',
