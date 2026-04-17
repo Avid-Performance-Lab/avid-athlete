@@ -767,7 +767,6 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
             </button>
           )}
         </div>
-      </div>
 
       {/* FAB Sauvegarder — bulle flottante bas droite */}
       {!readOnly && (
@@ -788,6 +787,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
           ) : '✓'}
         </button>
       )}
+      </div>
   )
 }
 
