@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { db, auth } from './firebase.js'
+import { db } from './firebase.js'
 import { doc, onSnapshot, collection, query, where, setDoc } from 'firebase/firestore'
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth'
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 
@@ -66,17 +65,6 @@ function InjectStyles() {
 
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [authReady, setAuthReady] = useState(false)
-
-  // Firebase Auth anonyme
-  useEffect(() => {
-    signInAnonymously(auth).catch(console.error)
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) setAuthReady(true)
-    })
-    return unsub
-  }, [])
-
   const [dark, setDark] = useState(() => {
     try {
       const s = localStorage.getItem('avid_theme')
@@ -233,15 +221,6 @@ export default function App() {
       setAthleteId(newId)
     } catch(e) { notify('⚠ Erreur création profil', C.red) }
   }
-
-  // Attendre Firebase Auth avant tout
-  if (!authReady) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
-      height:'100vh', background: C.bg, color: C.muted,
-      fontFamily:"'Barlow Condensed',sans-serif", fontSize:12, letterSpacing:3 }}>
-      CONNEXION...
-    </div>
-  )
 
   if (loading) return <LoadingScreen />
   if (soloSetup) return <SoloSetupScreen onCreate={createSoloProfil} />
@@ -576,39 +555,18 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
   }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 200,
-      background: C.bg, display: 'flex', flexDirection: 'column',
-      overflowY: 'auto'
-    }}>
-      {/* Header fixe en haut */}
-      <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`,
-        padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10,
-        position: 'sticky', top: 0, zIndex: 10, flexShrink: 0 }}>
+    <div className="fade-in" style={{ padding: '14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={onBack}
-          style={{ background: 'none', border: 'none', color: C.muted,
-            fontSize: 22, cursor: 'pointer', padding: '0 6px', lineHeight: 1,
-            display: 'flex', alignItems: 'center', flexShrink: 0 }}
-          title="Retour">
-          ←
+          style={{ background: C.card, border: `1px solid ${C.border}`, color: C.muted,
+            borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>
+          ← Retour
         </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.yellow,
-            letterSpacing: 1, whiteSpace: 'nowrap', overflow: 'hidden',
-            textOverflow: 'ellipsis' }}>{seance.label}</div>
-          <div style={{ fontSize: 9, color: C.muted }}>
-            Séance {seance.num} · {seance.exercices?.length || 0} exercices
-          </div>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.yellow, letterSpacing: 1 }}>{seance.label}</div>
+          <div style={{ fontSize: 10, color: C.muted }}>Séance {seance.num} · {seance.exercices?.length || 0} exercices</div>
         </div>
-        {saving && (
-          <div style={{ fontSize: 10, color: C.yellow, letterSpacing: 1, flexShrink: 0 }}>
-            ↑ SYNC...
-          </div>
-        )}
       </div>
-
-      {/* Contenu scrollable */}
-      <div style={{ padding: '14px', flex: 1 }}>
 
       {(readOnly ? seance.exercices : (local || [])).map((ex, ei) => {
         const srcEx = seance.exercices?.[ei] || ex
@@ -758,36 +716,23 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
         )
       })}
 
-          {!readOnly && (
-            <button onClick={addExoToSeance}
-              style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
-                borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
-                padding: '10px', cursor: 'pointer', marginBottom: 80, letterSpacing: 1 }}>
-              + AJOUTER UN EXERCICE
-            </button>
-          )}
-        </div>
-
-      {/* FAB Sauvegarder — bulle flottante bas droite */}
       {!readOnly && (
-        <button onClick={handleSave} disabled={saving}
-          style={{
-            position: 'fixed', bottom: 16, right: 18, zIndex: 210,
-            width: 52, height: 52, borderRadius: '50%',
-            background: saving ? C.muted : C.green,
-            border: 'none', cursor: saving ? 'default' : 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, boxShadow: saving ? 'none' : '0 4px 16px rgba(39,174,96,.5)',
-            transition: 'background .2s, box-shadow .2s',
-          }}
-          title="Sauvegarder la séance">
-          {saving ? (
-            <span style={{ fontSize: 16, animation: 'spin 1s linear infinite',
-              display: 'inline-block' }}>⏳</span>
-          ) : '✓'}
-        </button>
+        <>
+          <button onClick={addExoToSeance}
+            style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
+              borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
+              padding: '10px', cursor: 'pointer', marginBottom: 12, letterSpacing: 1 }}>
+            + AJOUTER UN EXERCICE
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ width: '100%', background: saving ? C.muted : C.green, color: C.white,
+              border: 'none', borderRadius: 10, padding: '14px', fontSize: 14, fontWeight: 800,
+              cursor: saving ? 'default' : 'pointer', letterSpacing: 1 }}>
+            {saving ? '⏳ SAUVEGARDE...' : '✓ SAUVEGARDER LA SÉANCE'}
+          </button>
+        </>
       )}
-      </div>
+    </div>
   )
 }
 
