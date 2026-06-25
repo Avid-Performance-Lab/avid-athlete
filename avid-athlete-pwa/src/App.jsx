@@ -501,11 +501,31 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 }
 
 // ── Séance Detail ─────────────────────────────────────────────────────────────
+const CARDIO_SUBTYPES = ['Course à pieds', 'Rameur', 'Vélo', 'Ski-Erg']
+const CARDIO_EFFORT_TYPES = ['EF', 'Tempo', 'VMA', 'Fractionné']
+const CATS = ['PUSH', 'PULL', 'JAMBES', 'FULL BODY', 'CARDIO']
+
+function isCardio(cat) { return (cat || '').toUpperCase() === 'CARDIO' }
+
 function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }) {
   const [local, setLocal] = useState(() => {
     if (readOnly) return null
-    return seance.exercices.map((ex, ei) => {
+    // Exercices prescrits
+    const base = seance.exercices.map((ex, ei) => {
       const existing = cahierData?.[ei]
+      if (isCardio(ex.cat)) {
+        return {
+          nom: ex.nom,
+          cat: ex.cat,
+          cardioType: existing?.cardioType || ex.cardioType || '',
+          duree: existing?.duree || ex.duree || '',
+          allure: existing?.allure || ex.allure || '',
+          effortType: existing?.effortType || ex.effortType || '',
+          intensite: existing?.intensite || '',
+          remarques: existing?.remarques || '',
+          series: [],
+        }
+      }
       return {
         nom: ex.nom,
         cat: ex.cat,
@@ -516,6 +536,25 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
         remarques: existing?.remarques || '',
       }
     })
+    // Exercices ajoutés par l'athlète (au-delà des prescrits, stockés dans cahierData)
+    if (cahierData && cahierData.length > seance.exercices.length) {
+      for (let ei = seance.exercices.length; ei < cahierData.length; ei++) {
+        const existing = cahierData[ei]
+        if (existing) base.push({
+          nom: existing.nom || '',
+          cat: existing.cat || 'FULL BODY',
+          cardioType: existing.cardioType || '',
+          duree: existing.duree || '',
+          allure: existing.allure || '',
+          effortType: existing.effortType || '',
+          series: existing.series || [{ reps: '', kg: '' }],
+          intensite: existing.intensite || '',
+          remarques: existing.remarques || '',
+          _added: true,
+        })
+      }
+    }
+    return base
   })
   const [saving, setSaving] = useState(false)
 
@@ -538,12 +577,23 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
     }))
   }
 
-  function addExoToSeance() {
-    setLocal(prev => [...prev, {
-      nom: '', cat: 'FULL BODY',
-      series: [{ reps: '', kg: '' }, { reps: '', kg: '' }, { reps: '', kg: '' }],
-      intensite: '', remarques: ''
-    }])
+  const [addExoCatPicker, setAddExoCatPicker] = useState(false)
+
+  function addExoToSeance(cat) {
+    setAddExoCatPicker(false)
+    if (isCardio(cat)) {
+      setLocal(prev => [...prev, {
+        nom: '', cat: 'CARDIO',
+        cardioType: '', duree: '', allure: '', effortType: '',
+        series: [], intensite: '', remarques: '', _added: true,
+      }])
+    } else {
+      setLocal(prev => [...prev, {
+        nom: '', cat: cat || 'FULL BODY',
+        series: [{ reps: '', kg: '' }, { reps: '', kg: '' }, { reps: '', kg: '' }],
+        intensite: '', remarques: '', _added: true,
+      }])
+    }
   }
 
   function removeExoFromSeance(ei) {
@@ -585,161 +635,327 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 
       <div style={{ padding: '14px', flex: 1 }}>
 
-      {(readOnly ? seance.exercices : (local || [])).map((ex, ei) => {
-        const srcEx = seance.exercices?.[ei] || ex
-        const cc = CAT_COLORS[(ex.cat || srcEx.cat)] || CAT_COLORS['FULL BODY']
-        // Pour les exercices du programme, utiliser seance.exercices; pour les extras, utiliser local
-        ex = ei < seance.exercices.length ? seance.exercices[ei] : { nom: local?.[ei]?.nom || '', cat: local?.[ei]?.cat || 'FULL BODY', series: [], intensite: '' }
+      {(readOnly ? seance.exercices : (local || [])).map((exLocal, ei) => {
+        // En mode lecture, on lit seance.exercices ; en mode cahier, on lit local
+        const exDisp = readOnly ? exLocal : (local?.[ei] || exLocal)
+        const prescEx = seance.exercices?.[ei] // exercice prescrit (peut être undefined si ajouté)
+        const isAdded = !readOnly && ei >= seance.exercices.length
+        const catKey = (exDisp.cat || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ')[0]
+        const cc = CAT_COLORS[catKey] || CAT_COLORS['FULL BODY']
+        const cardio = isCardio(exDisp.cat)
+        const rpeVal = local?.[ei]?.intensite
         return (
-          <div key={ex.id || ei} style={{ background: C.card, borderRadius: 10, marginBottom: 12,
-            border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+          <div key={ei} style={{ background: C.card, borderRadius: 10, marginBottom: 12,
+            border: `1px solid ${isAdded ? C.purple : C.border}`, overflow: 'hidden' }}>
             <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`,
               display: 'flex', alignItems: 'center', gap: 10, background: '#111' }}>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 9, fontWeight: 800,
-                padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{ex.cat}</div>
-              {(!readOnly && ei >= seance.exercices.length) ? (
+                padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{exDisp.cat}</div>
+              {(!readOnly && isAdded) ? (
                 <input value={local?.[ei]?.nom || ''}
                   onChange={e => updateExoNom(ei, e.target.value)}
                   placeholder="Nom de l'exercice"
                   style={{ background: 'none', border: 'none', borderBottom: `1px solid ${C.yellow}`,
                     fontSize: 13, fontWeight: 800, color: C.white, flex: 1, outline: 'none' }}/>
               ) : (
-                <div style={{ fontSize: 14, fontWeight: 800, color: C.white, flex: 1 }}>{ex.nom}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.white, flex: 1 }}>{exDisp.nom}</div>
               )}
-              <div style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3,
-                background: ex.intensite >= 9 ? C.red : ex.intensite >= 7 ? C.yellow : C.green,
-                color: ex.intensite >= 7 ? C.bg : C.white }}>
-                RPE {ex.intensite}
-              </div>
+              {!readOnly && isAdded && (
+                <button onClick={() => removeExoFromSeance(ei)}
+                  style={{ background: 'none', border: 'none', color: C.muted,
+                    fontSize: 18, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>×</button>
+              )}
+              {!readOnly && !cardio && (
+                <div style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3,
+                  background: rpeVal >= 9 ? C.red : rpeVal >= 7 ? C.yellow : rpeVal ? C.green : C.border,
+                  color: rpeVal >= 7 ? C.bg : C.white }}>
+                  {rpeVal ? `RPE ${rpeVal}` : 'RPE —'}
+                </div>
+              )}
             </div>
 
             <div style={{ padding: '10px 14px' }}>
-              {/* Headers */}
-              {readOnly ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr', gap: 6,
-                  marginBottom: 6, fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
-                  <div>#</div>
-                  <div style={{ textAlign: 'center' }}>REPS</div>
-                  <div style={{ textAlign: 'center' }}>KG PRESCRIT</div>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 1fr 1fr', gap: 5,
-                  marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
-                  <div>#</div>
-                  <div style={{ textAlign: 'center' }}>REPS P.</div>
-                  <div style={{ textAlign: 'center' }}>KG P.</div>
-                  <div style={{ textAlign: 'center', color: C.yellow }}>REPS R.</div>
-                  <div style={{ textAlign: 'center', color: C.yellow }}>KG R.</div>
-                </div>
-              )}
-
-              {(readOnly ? ex.series : local?.[ei]?.series || []).map((sr, si) => {
-                const prescSr = ex.series?.[si]
-                const prescReps = prescSr ? (Array.isArray(prescSr) ? prescSr[0] : prescSr.reps) : '—'
-                const prescKg   = prescSr ? (Array.isArray(prescSr) ? prescSr[1] : prescSr.kg)   : '—'
-                const reps = Array.isArray(sr) ? sr[0] : sr.reps
-                const kg   = Array.isArray(sr) ? sr[1] : sr.kg
-                const isExtra = !readOnly && si >= (ex.series?.length || 0)
-                return (
-                  <div key={si} style={{ display: 'grid',
-                    gridTemplateColumns: readOnly ? '28px 1fr 1fr' : '22px 1fr 1fr 1fr 1fr 24px',
-                    gap: readOnly ? 6 : 4, marginBottom: 6, alignItems: 'center' }}>
-                    <div style={{ fontSize: 11, color: isExtra ? C.orange : C.muted,
-                      fontWeight: 700, textAlign: 'center' }}>{si + 1}{isExtra ? '+' : ''}</div>
-                    {readOnly ? (
-                      <>
-                        <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
-                          fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'center' }}>{reps || '—'}</div>
-                        <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
-                          fontSize: 12, fontWeight: 700,
-                          color: parseFloat(kg) > 0 ? C.yellow : C.muted, textAlign: 'center' }}>
-                          {parseFloat(kg) > 0 ? `${kg}kg` : '—'}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
-                          fontSize: 11, color: C.muted, textAlign: 'center' }}>{prescReps || '—'}</div>
-                        <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
-                          fontSize: 11, color: C.muted, textAlign: 'center' }}>
-                          {parseFloat(prescKg) > 0 ? `${prescKg}` : '—'}
-                        </div>
+              {/* ── Cardio fields ── */}
+              {cardio ? (
+                !readOnly ? (
+                  <div>
+                    {/* Sous-type cardio */}
+                    <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>TYPE D'ACTIVITÉ</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                      {CARDIO_SUBTYPES.map(t => (
+                        <button key={t}
+                          onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, cardioType: t } : x))}
+                          style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid',
+                            borderColor: local?.[ei]?.cardioType === t ? C.red : C.border,
+                            background: local?.[ei]?.cardioType === t ? 'rgba(234,67,53,.12)' : C.card,
+                            color: local?.[ei]?.cardioType === t ? C.red : C.muted,
+                            fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 }}>
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Durée / Allure / Type effort */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                      <div>
+                        <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>DURÉE (min)</div>
                         <input type="number" inputMode="decimal"
-                          value={local?.[ei]?.series?.[si]?.reps || ''}
-                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
-                            ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, reps: e.target.value })
-                          }))}
-                          placeholder="reps"
-                          style={{ background: '#1a1a1a', border: `1px solid ${C.green}`,
-                            borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
-                            color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}
-                        />
-                        <input type="number" inputMode="decimal"
-                          value={local?.[ei]?.series?.[si]?.kg || ''}
-                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
-                            ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, kg: e.target.value })
-                          }))}
-                          placeholder="kg"
-                          style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`,
-                            borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
-                            color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}
-                        />
-                        <button onClick={() => removeSerieFromExo(ei, si)}
-                          style={{ background: 'none', border: 'none', color: C.muted,
-                            fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
-                      </>
-                    )}
+                          value={local?.[ei]?.duree || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, duree: e.target.value } : x))}
+                          placeholder="45"
+                          style={{ width: '100%', background: '#1a1a1a', border: `1px solid ${C.green}`,
+                            borderRadius: 6, padding: '9px 10px', fontSize: 13, fontWeight: 700,
+                            color: C.green, outline: 'none', textAlign: 'center' }}/>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>ALLURE (min/km)</div>
+                        <input
+                          value={local?.[ei]?.allure || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, allure: e.target.value } : x))}
+                          placeholder="5:30"
+                          style={{ width: '100%', background: '#1a1a1a', border: `1px solid ${C.yellow}`,
+                            borderRadius: 6, padding: '9px 10px', fontSize: 13, fontWeight: 700,
+                            color: C.yellow, outline: 'none', textAlign: 'center' }}/>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>TYPE D'EFFORT</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                      {CARDIO_EFFORT_TYPES.map(t => (
+                        <button key={t}
+                          onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, effortType: t } : x))}
+                          style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid',
+                            borderColor: local?.[ei]?.effortType === t ? C.orange : C.border,
+                            background: local?.[ei]?.effortType === t ? 'rgba(242,153,74,.12)' : C.card,
+                            color: local?.[ei]?.effortType === t ? C.orange : C.muted,
+                            fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 }}>
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    {/* RPE + remarques */}
+                    <div style={{ paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+                        {[1,2,3,4,5,6,7,8,9,10].map(v => (
+                          <button key={v}
+                            onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, intensite: String(v) } : x))}
+                            style={{ width: 32, height: 32, borderRadius: 6, border: 'none',
+                              background: local?.[ei]?.intensite === String(v)
+                                ? (v >= 9 ? C.red : v >= 7 ? C.yellow : C.green) : C.border,
+                              color: local?.[ei]?.intensite === String(v) ? (v >= 7 ? C.bg : C.white) : C.muted,
+                              fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={local?.[ei]?.remarques || ''}
+                        onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
+                        placeholder="Remarques (sensations, conditions...)"
+                        rows={2}
+                        style={{ width: '100%', background: '#111', border: `1px solid ${C.border}`,
+                          borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text,
+                          resize: 'none', outline: 'none' }}/>
+                    </div>
+                  </div>
+                ) : (
+                  /* Cardio read-only */
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 2 }}>
+                    {exDisp.cardioType && <div>🏃 <strong style={{ color: C.text }}>{exDisp.cardioType}</strong></div>}
+                    {exDisp.duree && <div>⏱ <strong style={{ color: C.text }}>{exDisp.duree} min</strong></div>}
+                    {exDisp.allure && <div>🎯 Allure : <strong style={{ color: C.yellow }}>{exDisp.allure} min/km</strong></div>}
+                    {exDisp.effortType && <div>⚡ <strong style={{ color: C.orange }}>{exDisp.effortType}</strong></div>}
                   </div>
                 )
-              })}
-              {!readOnly && (
-                <button onClick={() => addSerieToExo(ei)}
-                  style={{ width: '100%', background: 'none', border: `1px dashed ${C.orange}`,
-                    borderRadius: 5, color: C.orange, fontSize: 11, fontWeight: 700,
-                    padding: '5px', cursor: 'pointer', marginTop: 4, letterSpacing: 1 }}>
-                  + SÉRIE SUPPLÉMENTAIRE
-                </button>
-              )}
+              ) : (
+                /* ── Musculation fields ── */
+                <>
+                  {/* Headers */}
+                  {readOnly ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr', gap: 6,
+                      marginBottom: 6, fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
+                      <div>#</div>
+                      <div style={{ textAlign: 'center' }}>REPS</div>
+                      <div style={{ textAlign: 'center' }}>KG PRESCRIT</div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid',
+                      gridTemplateColumns: isAdded ? '22px 1fr 1fr 24px' : '22px 1fr 1fr 1fr 1fr',
+                      gap: 5, marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
+                      <div>#</div>
+                      {isAdded ? (
+                        <>
+                          <div style={{ textAlign: 'center', color: C.yellow }}>REPS</div>
+                          <div style={{ textAlign: 'center', color: C.yellow }}>KG</div>
+                          <div />
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ textAlign: 'center' }}>REPS P.</div>
+                          <div style={{ textAlign: 'center' }}>KG P.</div>
+                          <div style={{ textAlign: 'center', color: C.yellow }}>REPS R.</div>
+                          <div style={{ textAlign: 'center', color: C.yellow }}>KG R.</div>
+                        </>
+                      )}
+                    </div>
+                  )}
 
-              {!readOnly && (
-                <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
-                    {[1,2,3,4,5,6,7,8,9,10].map(v => (
-                      <button key={v}
-                        onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, intensite: String(v) } : x))}
-                        style={{ width: 32, height: 32, borderRadius: 6, border: 'none',
-                          background: local?.[ei]?.intensite === String(v)
-                            ? (v >= 9 ? C.red : v >= 7 ? C.yellow : C.green) : C.border,
-                          color: local?.[ei]?.intensite === String(v) ? (v >= 7 ? C.bg : C.white) : C.muted,
-                          fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
-                        {v}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={local?.[ei]?.remarques || ''}
-                    onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
-                    placeholder="Remarques (douleurs, sensations...)"
-                    rows={2}
-                    style={{ width: '100%', background: '#111', border: `1px solid ${C.border}`,
-                      borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text,
-                      resize: 'none', outline: 'none' }}
-                  />
-                </div>
+                  {(readOnly ? exDisp.series : local?.[ei]?.series || []).map((sr, si) => {
+                    const prescSr = prescEx?.series?.[si]
+                    const prescReps = prescSr ? (Array.isArray(prescSr) ? prescSr[0] : prescSr.reps) : '—'
+                    const prescKg   = prescSr ? (Array.isArray(prescSr) ? prescSr[1] : prescSr.kg)   : '—'
+                    const reps = Array.isArray(sr) ? sr[0] : sr.reps
+                    const kg   = Array.isArray(sr) ? sr[1] : sr.kg
+                    const isExtraSerie = !readOnly && si >= (prescEx?.series?.length || 0)
+                    return (
+                      <div key={si} style={{ display: 'grid',
+                        gridTemplateColumns: readOnly ? '28px 1fr 1fr'
+                          : isAdded ? '22px 1fr 1fr 24px'
+                          : '22px 1fr 1fr 1fr 1fr 24px',
+                        gap: readOnly ? 6 : 4, marginBottom: 6, alignItems: 'center' }}>
+                        <div style={{ fontSize: 11, color: isExtraSerie ? C.orange : C.muted,
+                          fontWeight: 700, textAlign: 'center' }}>{si + 1}{isExtraSerie ? '+' : ''}</div>
+                        {readOnly ? (
+                          <>
+                            <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
+                              fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'center' }}>{reps || '—'}</div>
+                            <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
+                              fontSize: 12, fontWeight: 700,
+                              color: parseFloat(kg) > 0 ? C.yellow : C.muted, textAlign: 'center' }}>
+                              {parseFloat(kg) > 0 ? `${kg}kg` : '—'}
+                            </div>
+                          </>
+                        ) : isAdded ? (
+                          <>
+                            <input type="number" inputMode="decimal"
+                              value={local?.[ei]?.series?.[si]?.reps || ''}
+                              onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+                                ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, reps: e.target.value })
+                              }))}
+                              placeholder="reps"
+                              style={{ background: '#1a1a1a', border: `1px solid ${C.green}`,
+                                borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
+                                color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                            <input type="number" inputMode="decimal"
+                              value={local?.[ei]?.series?.[si]?.kg || ''}
+                              onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+                                ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, kg: e.target.value })
+                              }))}
+                              placeholder="kg"
+                              style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`,
+                                borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
+                                color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                            <button onClick={() => removeSerieFromExo(ei, si)}
+                              style={{ background: 'none', border: 'none', color: C.muted,
+                                fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
+                              fontSize: 11, color: C.muted, textAlign: 'center' }}>{prescReps || '—'}</div>
+                            <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
+                              fontSize: 11, color: C.muted, textAlign: 'center' }}>
+                              {parseFloat(prescKg) > 0 ? `${prescKg}` : '—'}
+                            </div>
+                            <input type="number" inputMode="decimal"
+                              value={local?.[ei]?.series?.[si]?.reps || ''}
+                              onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+                                ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, reps: e.target.value })
+                              }))}
+                              placeholder="reps"
+                              style={{ background: '#1a1a1a', border: `1px solid ${C.green}`,
+                                borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
+                                color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                            <input type="number" inputMode="decimal"
+                              value={local?.[ei]?.series?.[si]?.kg || ''}
+                              onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+                                ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, kg: e.target.value })
+                              }))}
+                              placeholder="kg"
+                              style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`,
+                                borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
+                                color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                            <button onClick={() => removeSerieFromExo(ei, si)}
+                              style={{ background: 'none', border: 'none', color: C.muted,
+                                fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {!readOnly && (
+                    <button onClick={() => addSerieToExo(ei)}
+                      style={{ width: '100%', background: 'none', border: `1px dashed ${C.orange}`,
+                        borderRadius: 5, color: C.orange, fontSize: 11, fontWeight: 700,
+                        padding: '5px', cursor: 'pointer', marginTop: 4, letterSpacing: 1 }}>
+                      + SÉRIE SUPPLÉMENTAIRE
+                    </button>
+                  )}
+                  {!readOnly && (
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+                        {[1,2,3,4,5,6,7,8,9,10].map(v => (
+                          <button key={v}
+                            onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, intensite: String(v) } : x))}
+                            style={{ width: 32, height: 32, borderRadius: 6, border: 'none',
+                              background: local?.[ei]?.intensite === String(v)
+                                ? (v >= 9 ? C.red : v >= 7 ? C.yellow : C.green) : C.border,
+                              color: local?.[ei]?.intensite === String(v) ? (v >= 7 ? C.bg : C.white) : C.muted,
+                              fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={local?.[ei]?.remarques || ''}
+                        onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
+                        placeholder="Remarques (douleurs, sensations...)"
+                        rows={2}
+                        style={{ width: '100%', background: '#111', border: `1px solid ${C.border}`,
+                          borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text,
+                          resize: 'none', outline: 'none' }}/>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
         )
       })}
 
+      {/* Sélecteur de catégorie pour ajouter un exercice */}
       {!readOnly && (
-        <button onClick={addExoToSeance}
+        addExoCatPicker ? (
+          <div style={{ background: C.card, borderRadius: 10, border: `1px dashed ${C.purple}`,
+            padding: '14px', marginBottom: 80 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.purple, letterSpacing: 2, marginBottom: 12 }}>
+              CHOISIR LA CATÉGORIE
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {CATS.map(cat => {
+                const cc2 = CAT_COLORS[cat] || CAT_COLORS['FULL BODY']
+                return (
+                  <button key={cat} onClick={() => addExoToSeance(cat)}
+                    style={{ padding: '8px 16px', borderRadius: 6, border: 'none',
+                      background: cc2.bg, color: cc2.text,
+                      fontSize: 12, fontWeight: 800, cursor: 'pointer', letterSpacing: 1 }}>
+                    {cat}
+                  </button>
+                )
+              })}
+            </div>
+            <button onClick={() => setAddExoCatPicker(false)}
+              style={{ marginTop: 10, background: 'none', border: 'none', color: C.muted,
+                fontSize: 11, cursor: 'pointer', padding: 0 }}>Annuler</button>
+          </div>
+        ) : (
+          <button onClick={() => setAddExoCatPicker(true)}
             style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
               borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
               padding: '10px', cursor: 'pointer', marginBottom: 80, letterSpacing: 1 }}>
             + AJOUTER UN EXERCICE
           </button>
+        )
       )}
 
       </div>
