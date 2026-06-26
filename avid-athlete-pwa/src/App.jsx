@@ -503,7 +503,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 // ── Séance Detail ─────────────────────────────────────────────────────────────
 const CARDIO_SUBTYPES = ['Course à pieds', 'Rameur', 'Vélo', 'Ski-Erg']
 const CARDIO_EFFORT_TYPES = ['EF', 'Tempo', 'VMA', 'Fractionné']
-const CATS = ['POUSSEE', 'TIRAGE', 'JAMBES', 'FULL BODY', 'CARDIO']
+const CATS = ['PUSH', 'PULL', 'JAMBES', 'FULL BODY', 'CARDIO']
 
 function isCardio(cat) { return (cat || '').toUpperCase() === 'CARDIO' }
 
@@ -557,49 +557,6 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
     return base
   })
   const [saving, setSaving] = useState(false)
-  const cahierDataRef = React.useRef(null)
-
-  // Resync local quand cahierData arrive depuis Firebase (async)
-  React.useEffect(() => {
-    if (readOnly || !cahierData) return
-    if (cahierDataRef.current === cahierData) return
-    cahierDataRef.current = cahierData
-    const base = seance.exercices.map((ex, ei) => {
-      const existing = cahierData?.[ei]
-      if (isCardio(ex.cat)) {
-        return {
-          nom: ex.nom, cat: ex.cat,
-          cardioType: existing?.cardioType || ex.cardioType || '',
-          duree: existing?.duree || ex.duree || '',
-          allure: existing?.allure || ex.allure || '',
-          effortType: existing?.effortType || ex.effortType || '',
-          intensite: existing?.intensite || '',
-          remarques: existing?.remarques || '',
-          series: [],
-        }
-      }
-      return {
-        nom: ex.nom, cat: ex.cat,
-        series: existing?.series?.length ? existing.series : ex.series.map(() => ({ reps: '', kg: '' })),
-        intensite: existing?.intensite || '',
-        remarques: existing?.remarques || '',
-      }
-    })
-    if (cahierData.length > seance.exercices.length) {
-      for (let ei = seance.exercices.length; ei < cahierData.length; ei++) {
-        const existing = cahierData[ei]
-        if (existing) base.push({
-          nom: existing.nom || '', cat: existing.cat || 'FULL BODY',
-          cardioType: existing.cardioType || '', duree: existing.duree || '',
-          allure: existing.allure || '', effortType: existing.effortType || '',
-          series: existing.series || [{ reps: '', kg: '' }],
-          intensite: existing.intensite || '', remarques: existing.remarques || '',
-          _added: true,
-        })
-      }
-    }
-    setLocal(base)
-  }, [cahierData])
 
   async function handleSave() {
     setSaving(true)
