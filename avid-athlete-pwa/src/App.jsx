@@ -743,10 +743,12 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                         <div style={{ marginBottom: 14, padding: '8px 10px', background: '#111', borderRadius: 6, border: `1px solid ${C.border}` }}>
                           <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>PRESCRIT PAR LE COACH</div>
                           {blocsPrescrits.map((b, bi) => (
-                            <div key={bi} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: bi < blocsPrescrits.length - 1 ? 6 : 0 }}>
+                            <div key={bi} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: bi < blocsPrescrits.length - 1 ? 6 : 0 }}>
                               <span style={{ fontSize: 10, color: C.muted, fontWeight: 700, minWidth: 16 }}>{bi+1}</span>
                               {b.duree && <span style={{ fontSize: 12, fontWeight: 700, color: C.green }}>⏱ {b.duree}min</span>}
                               {b.allure && <span style={{ fontSize: 12, fontWeight: 700, color: C.yellow }}>@ {b.allure}</span>}
+                              {b.watt && <span style={{ fontSize: 12, fontWeight: 700, color: '#F2994A' }}>⚡ {b.watt}W</span>}
+                              {b.kcal && <span style={{ fontSize: 12, fontWeight: 700, color: '#EB5757' }}>🔥 {b.kcal}kcal</span>}
                               {b.effortType && <span style={{ fontSize: 11, fontWeight: 700, color: C.orange, padding: '1px 6px', borderRadius: 3, background: 'rgba(242,153,74,.12)' }}>{b.effortType}</span>}
                             </div>
                           ))}
@@ -755,34 +757,44 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                     })()}
                     {/* Blocs réalisés par l'athlète */}
                     <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>RÉALISÉ</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 1fr 1fr 20px', gap: 6, marginBottom: 6, fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 1fr 1fr 1fr 1fr 18px', gap: 5, marginBottom: 6, fontSize: 8, color: C.muted, fontWeight: 700, letterSpacing: 1 }}>
                       <div>#</div>
                       <div style={{ textAlign: 'center' }}>DURÉE</div>
                       <div style={{ textAlign: 'center' }}>ALLURE</div>
+                      <div style={{ textAlign: 'center' }}>WATT</div>
+                      <div style={{ textAlign: 'center' }}>KCAL</div>
                       <div style={{ textAlign: 'center' }}>EFFORT</div>
                       <div/>
                     </div>
-                    {(local?.[ei]?.blocs || [{ duree: '', allure: '', effortType: 'EF' }]).map((bloc, bi) => (
-                      <div key={bi} style={{ display: 'grid', gridTemplateColumns: '20px 1fr 1fr 1fr 20px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                    {(local?.[ei]?.blocs || [{ duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }]).map((bloc, bi) => (
+                      <div key={bi} style={{ display: 'grid', gridTemplateColumns: '18px 1fr 1fr 1fr 1fr 1fr 18px', gap: 5, marginBottom: 6, alignItems: 'center' }}>
                         <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textAlign: 'center' }}>{bi+1}</div>
                         <input type="text" inputMode="decimal" value={bloc.duree || ''}
                           onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, duree: e.target.value } : b) }))}
-                          placeholder="45"
-                          style={{ background: '#1a1a1a', border: `1px solid ${C.green}`, borderRadius: 5, padding: '7px 4px', fontSize: 12, fontWeight: 700, color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                          placeholder="min"
+                          style={{ background: '#1a1a1a', border: `1px solid ${C.green}`, borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}/>
                         <input type="text" value={bloc.allure || ''}
                           onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, allure: e.target.value } : b) }))}
                           placeholder="5:30"
-                          style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`, borderRadius: 5, padding: '7px 4px', fontSize: 12, fontWeight: 700, color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                          style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`, borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                        <input type="text" inputMode="decimal" value={bloc.watt || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, watt: e.target.value } : b) }))}
+                          placeholder="W"
+                          style={{ background: '#1a1a1a', border: '1px solid #F2994A', borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: '#F2994A', textAlign: 'center', width: '100%', outline: 'none' }}/>
+                        <input type="text" inputMode="decimal" value={bloc.kcal || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, kcal: e.target.value } : b) }))}
+                          placeholder="kcal"
+                          style={{ background: '#1a1a1a', border: '1px solid #EB5757', borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: '#EB5757', textAlign: 'center', width: '100%', outline: 'none' }}/>
                         <select value={bloc.effortType || 'EF'}
                           onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, effortType: e.target.value } : b) }))}
-                          style={{ background: '#1a1a1a', border: `1px solid ${C.orange}`, borderRadius: 5, padding: '7px 4px', fontSize: 11, fontWeight: 700, color: C.orange, textAlign: 'center', width: '100%', outline: 'none' }}>
+                          style={{ background: '#1a1a1a', border: `1px solid ${C.orange}`, borderRadius: 5, padding: '7px 3px', fontSize: 10, fontWeight: 700, color: C.orange, textAlign: 'center', width: '100%', outline: 'none' }}>
                           {CARDIO_EFFORT_TYPES.map(t => <option key={t}>{t}</option>)}
                         </select>
                         <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).filter((_, bj) => bj !== bi) }))}
                           style={{ background: 'none', border: 'none', color: C.muted, fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
                       </div>
                     ))}
-                    <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: [...(x.blocs || [{ duree: '', allure: '', effortType: 'EF' }]), { duree: '', allure: '', effortType: 'EF' }] }))}
+                    <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: [...(x.blocs || [{ duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }]), { duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }] }))}
                       style={{ width: '100%', background: 'none', border: `1px dashed ${C.border}`, borderRadius: 5, color: C.muted, fontSize: 11, fontWeight: 700, padding: '5px', cursor: 'pointer', marginTop: 4, marginBottom: 14, letterSpacing: 1 }}>
                       + BLOC D'EFFORT
                     </button>
@@ -819,10 +831,12 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                     {(() => {
                       const blocs = exDisp.blocs || (exDisp.duree ? [{ duree: exDisp.duree, allure: exDisp.allure, effortType: exDisp.effortType }] : [])
                       return blocs.map((b, bi) => (
-                        <div key={bi} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6, padding: '6px 8px', background: '#111', borderRadius: 6 }}>
+                        <div key={bi} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6, padding: '6px 8px', background: '#111', borderRadius: 6 }}>
                           <span style={{ color: C.muted, fontWeight: 700, fontSize: 10, minWidth: 16 }}>{bi+1}</span>
                           {b.duree && <span style={{ fontWeight: 700, color: C.green }}>⏱ {b.duree}min</span>}
                           {b.allure && <span style={{ fontWeight: 700, color: C.yellow }}>@ {b.allure}</span>}
+                          {b.watt && <span style={{ fontWeight: 700, color: '#F2994A' }}>⚡ {b.watt}W</span>}
+                          {b.kcal && <span style={{ fontWeight: 700, color: '#EB5757' }}>🔥 {b.kcal}kcal</span>}
                           {b.effortType && <span style={{ fontWeight: 700, color: C.orange, padding: '1px 6px', borderRadius: 3, background: 'rgba(242,153,74,.12)', fontSize: 11 }}>{b.effortType}</span>}
                         </div>
                       ))
