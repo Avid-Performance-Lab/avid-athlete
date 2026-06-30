@@ -26,7 +26,6 @@ const CAT_COLORS = {
   TIRAGE:      { bg: '#27AE60', text: '#FFF' },
   'FULL BODY': { bg: '#9B51E0', text: '#FFF' },
   CARDIO:      { bg: '#EA4335', text: '#FFF' },
-  AUTRES:      { bg: '#4A4A4A', text: '#FFF' },
 }
 
 function catColor(label = '') {
@@ -328,11 +327,11 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     newSem.seances = newSem.seances.map(sea => ({
       ...sea,
       id: uid(),
-      exercices: (sea.exercices||[]).map(ex => ({
+      exercices: sea.exercices.map(ex => ({
         ...ex,
         id: uid(),
         // Garder séries prescrites, vider le cahier
-        series: (ex.series||[]).map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
+        series: ex.series.map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
       }))
     }))
     const updated = JSON.parse(JSON.stringify(athlete))
@@ -351,13 +350,13 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     newBloc.semaines = newBloc.semaines.map(sem => ({
       ...sem,
       id: uid(),
-      seances: (sem.seances||[]).map(sea => ({
+      seances: sem.seances.map(sea => ({
         ...sea,
         id: uid(),
-        exercices: (sea.exercices||[]).map(ex => ({
+        exercices: sea.exercices.map(ex => ({
           ...ex,
           id: uid(),
-          series: (ex.series||[]).map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
+          series: ex.series.map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
         }))
       }))
     }))
@@ -502,99 +501,23 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 }
 
 // ── Séance Detail ─────────────────────────────────────────────────────────────
-const CARDIO_SUBTYPES = ['Course à pieds', 'Rameur', 'Vélo', 'Ski-Erg']
-const CARDIO_EFFORT_TYPES = ['EF', 'Tempo', 'VMA', 'Fractionné']
-const CATS = ['POUSSEE', 'TIRAGE', 'JAMBES', 'FULL BODY', 'CARDIO', 'AUTRES']
-
-function isCardio(cat) { return (cat || '').toUpperCase() === 'CARDIO' }
-
 function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }) {
   const [local, setLocal] = useState(() => {
     if (readOnly) return null
-    // Exercices prescrits
-    const base = (seance.exercices || []).map((ex, ei) => {
+    return seance.exercices.map((ex, ei) => {
       const existing = cahierData?.[ei]
-      if (isCardio(ex.cat)) {
-        return {
-          nom: ex.nom,
-          cat: ex.cat,
-          cardioType: existing?.cardioType || ex.cardioType || '',
-          blocs: existing?.blocs || (existing?.duree ? [{duree: existing.duree, allure: existing.allure||'', effortType: existing.effortType||'EF'}] : (ex.blocs || [{duree:'',allure:'',effortType:'EF'}])),
-          intensite: existing?.intensite || '',
-          remarques: existing?.remarques || '',
-          series: [],
-        }
-      }
       return {
         nom: ex.nom,
         cat: ex.cat,
         series: existing?.series?.length
           ? existing.series
-          : (ex.series || []).map(() => ({ reps: '', kg: '' })),
+          : ex.series.map(() => ({ reps: '', kg: '' })),
         intensite: existing?.intensite || '',
         remarques: existing?.remarques || '',
       }
     })
-    // Exercices ajoutés par l'athlète (au-delà des prescrits, stockés dans cahierData)
-    if (cahierData && cahierData.length > (seance.exercices || []).length) {
-      for (let ei = (seance.exercices || []).length; ei < cahierData.length; ei++) {
-        const existing = cahierData[ei]
-        if (existing) base.push({
-          nom: existing.nom || '',
-          cat: existing.cat || 'FULL BODY',
-          cardioType: existing.cardioType || '',
-          blocs: existing.blocs || (existing.duree ? [{duree: existing.duree, allure: existing.allure||'', effortType: existing.effortType||'EF'}] : [{duree:'',allure:'',effortType:'EF'}]),
-          series: existing.series || [{ reps: '', kg: '' }],
-          intensite: existing.intensite || '',
-          remarques: existing.remarques || '',
-          _added: true,
-        })
-      }
-    }
-    return base
   })
   const [saving, setSaving] = useState(false)
-  const cahierDataRef = React.useRef(null)
-
-  // Resync local quand cahierData arrive depuis Firebase (async)
-  React.useEffect(() => {
-    if (readOnly || !cahierData) return
-    if (cahierDataRef.current === cahierData) return
-    cahierDataRef.current = cahierData
-    const base = (seance.exercices || []).map((ex, ei) => {
-      const existing = cahierData?.[ei]
-      if (isCardio(ex.cat)) {
-        return {
-          nom: ex.nom, cat: ex.cat,
-          cardioType: existing?.cardioType || ex.cardioType || '',
-          blocs: existing?.blocs || (existing?.duree ? [{duree: existing.duree, allure: existing.allure||'', effortType: existing.effortType||'EF'}] : (ex.blocs || [{duree:'',allure:'',effortType:'EF'}])),
-          intensite: existing?.intensite || '',
-          remarques: existing?.remarques || '',
-          series: [],
-        }
-      }
-      return {
-        nom: ex.nom, cat: ex.cat,
-        series: existing?.series?.length ? existing.series : (ex.series || []).map(() => ({ reps: '', kg: '' })),
-        intensite: existing?.intensite || '',
-        remarques: existing?.remarques || '',
-      }
-    })
-    if (cahierData.length > (seance.exercices || []).length) {
-      for (let ei = (seance.exercices || []).length; ei < cahierData.length; ei++) {
-        const existing = cahierData[ei]
-        if (existing) base.push({
-          nom: existing.nom || '', cat: existing.cat || 'FULL BODY',
-          cardioType: existing.cardioType || '',
-          blocs: existing.blocs || (existing.duree ? [{duree: existing.duree, allure: existing.allure||'', effortType: existing.effortType||'EF'}] : [{duree:'',allure:'',effortType:'EF'}]),
-          series: existing.series || [{ reps: '', kg: '' }],
-          intensite: existing.intensite || '', remarques: existing.remarques || '',
-          _added: true,
-        })
-      }
-    }
-    setLocal(base)
-  }, [cahierData])
 
   async function handleSave() {
     setSaving(true)
@@ -615,23 +538,12 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
     }))
   }
 
-  const [addExoCatPicker, setAddExoCatPicker] = useState(false)
-
-  function addExoToSeance(cat) {
-    setAddExoCatPicker(false)
-    if (isCardio(cat)) {
-      setLocal(prev => [...prev, {
-        nom: '', cat: 'CARDIO',
-        cardioType: '', blocs: [{ duree: '', allure: '', effortType: 'EF' }],
-        series: [], intensite: '', remarques: '', _added: true,
-      }])
-    } else {
-      setLocal(prev => [...prev, {
-        nom: '', cat: cat || 'FULL BODY',
-        series: [{ reps: '', kg: '' }, { reps: '', kg: '' }, { reps: '', kg: '' }],
-        intensite: '', remarques: '', _added: true,
-      }])
-    }
+  function addExoToSeance() {
+    setLocal(prev => [...prev, {
+      nom: '', cat: 'FULL BODY',
+      series: [{ reps: '', kg: '' }, { reps: '', kg: '' }, { reps: '', kg: '' }],
+      intensite: '', remarques: ''
+    }])
   }
 
   function removeExoFromSeance(ei) {
@@ -673,364 +585,161 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 
       <div style={{ padding: '14px', flex: 1 }}>
 
-      {(readOnly ? (seance.exercices||[]) : (local || [])).map((exLocal, ei) => {
-        // En mode lecture, on lit seance.exercices ; en mode cahier, on lit local
-        const exDisp = readOnly ? exLocal : (local?.[ei] || exLocal)
-        const prescEx = seance.exercices?.[ei] // exercice prescrit (peut être undefined si ajouté)
-        const isAdded = !readOnly && ei >= (seance.exercices||[]).length
-        const catKey = (exDisp.cat || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ')[0]
-        const cc = CAT_COLORS[catKey] || CAT_COLORS['FULL BODY']
-        const cardio = isCardio(exDisp.cat)
-        const rpeVal = local?.[ei]?.intensite
+      {(readOnly ? seance.exercices : (local || [])).map((ex, ei) => {
+        const srcEx = seance.exercices?.[ei] || ex
+        const cc = CAT_COLORS[(ex.cat || srcEx.cat)] || CAT_COLORS['FULL BODY']
+        // Pour les exercices du programme, utiliser seance.exercices; pour les extras, utiliser local
+        ex = ei < seance.exercices.length ? seance.exercices[ei] : { nom: local?.[ei]?.nom || '', cat: local?.[ei]?.cat || 'FULL BODY', series: [], intensite: '' }
         return (
-          <div key={ei} style={{ background: C.card, borderRadius: 10, marginBottom: 12,
-            border: `1px solid ${isAdded ? C.purple : C.border}`, overflow: 'hidden' }}>
+          <div key={ex.id || ei} style={{ background: C.card, borderRadius: 10, marginBottom: 12,
+            border: `1px solid ${C.border}`, overflow: 'hidden' }}>
             <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`,
               display: 'flex', alignItems: 'center', gap: 10, background: '#111' }}>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 9, fontWeight: 800,
-                padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{exDisp.cat}</div>
-              {(!readOnly && isAdded) ? (
+                padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{ex.cat}</div>
+              {(!readOnly && ei >= seance.exercices.length) ? (
                 <input value={local?.[ei]?.nom || ''}
                   onChange={e => updateExoNom(ei, e.target.value)}
                   placeholder="Nom de l'exercice"
                   style={{ background: 'none', border: 'none', borderBottom: `1px solid ${C.yellow}`,
                     fontSize: 13, fontWeight: 800, color: C.white, flex: 1, outline: 'none' }}/>
               ) : (
-                <div style={{ fontSize: 14, fontWeight: 800, color: C.white, flex: 1 }}>{exDisp.nom}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.white, flex: 1 }}>{ex.nom}</div>
               )}
-              {!readOnly && isAdded && (
-                <button onClick={() => removeExoFromSeance(ei)}
-                  style={{ background: 'none', border: 'none', color: C.muted,
-                    fontSize: 18, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>×</button>
-              )}
-              {!readOnly && !cardio && (
-                <div style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3,
-                  background: rpeVal >= 9 ? C.red : rpeVal >= 7 ? C.yellow : rpeVal ? C.green : C.border,
-                  color: rpeVal >= 7 ? C.bg : C.white }}>
-                  {rpeVal ? `RPE ${rpeVal}` : 'RPE —'}
-                </div>
-              )}
+              <div style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3,
+                background: ex.intensite >= 9 ? C.red : ex.intensite >= 7 ? C.yellow : C.green,
+                color: ex.intensite >= 7 ? C.bg : C.white }}>
+                RPE {ex.intensite}
+              </div>
             </div>
 
             <div style={{ padding: '10px 14px' }}>
-              {/* ── Cardio fields ── */}
-              {cardio ? (
-                !readOnly ? (
-                  <div>
-                    {/* Sous-type cardio */}
-                    <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>TYPE D'ACTIVITÉ</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                      {CARDIO_SUBTYPES.map(t => (
-                        <button key={t}
-                          onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, cardioType: t } : x))}
-                          style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid',
-                            borderColor: local?.[ei]?.cardioType === t ? C.red : C.border,
-                            background: local?.[ei]?.cardioType === t ? 'rgba(234,67,53,.12)' : C.card,
-                            color: local?.[ei]?.cardioType === t ? C.red : C.muted,
-                            fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 }}>
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                    {/* Blocs durée/allure/effort prescrits (lecture seule) */}
-                    {(() => {
-                      const exPrescrit = seance.exercices?.[ei]
-                      const blocsPrescrits = exPrescrit?.blocs || (exPrescrit?.duree ? [{duree: exPrescrit.duree, allure: exPrescrit.allure, effortType: exPrescrit.effortType}] : null)
-                      if (!blocsPrescrits?.length) return null
-                      return (
-                        <div style={{ marginBottom: 14, padding: '8px 10px', background: '#111', borderRadius: 6, border: `1px solid ${C.border}` }}>
-                          <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>PRESCRIT PAR LE COACH</div>
-                          {blocsPrescrits.map((b, bi) => (
-                            <div key={bi} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: bi < blocsPrescrits.length - 1 ? 6 : 0 }}>
-                              <span style={{ fontSize: 10, color: C.muted, fontWeight: 700, minWidth: 16 }}>{bi+1}</span>
-                              {b.duree && <span style={{ fontSize: 12, fontWeight: 700, color: C.green }}>⏱ {b.duree}min</span>}
-                              {b.allure && <span style={{ fontSize: 12, fontWeight: 700, color: C.yellow }}>@ {b.allure}</span>}
-                              {b.watt && <span style={{ fontSize: 12, fontWeight: 700, color: '#F2994A' }}>⚡ {b.watt}W</span>}
-                              {b.kcal && <span style={{ fontSize: 12, fontWeight: 700, color: '#EB5757' }}>🔥 {b.kcal}kcal</span>}
-                              {b.effortType && <span style={{ fontSize: 11, fontWeight: 700, color: C.orange, padding: '1px 6px', borderRadius: 3, background: 'rgba(242,153,74,.12)' }}>{b.effortType}</span>}
-                            </div>
-                          ))}
+              {/* Headers */}
+              {readOnly ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr', gap: 6,
+                  marginBottom: 6, fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
+                  <div>#</div>
+                  <div style={{ textAlign: 'center' }}>REPS</div>
+                  <div style={{ textAlign: 'center' }}>KG PRESCRIT</div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 1fr 1fr', gap: 5,
+                  marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
+                  <div>#</div>
+                  <div style={{ textAlign: 'center' }}>REPS P.</div>
+                  <div style={{ textAlign: 'center' }}>KG P.</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>REPS R.</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>KG R.</div>
+                </div>
+              )}
+
+              {(readOnly ? ex.series : local?.[ei]?.series || []).map((sr, si) => {
+                const prescSr = ex.series?.[si]
+                const prescReps = prescSr ? (Array.isArray(prescSr) ? prescSr[0] : prescSr.reps) : '—'
+                const prescKg   = prescSr ? (Array.isArray(prescSr) ? prescSr[1] : prescSr.kg)   : '—'
+                const reps = Array.isArray(sr) ? sr[0] : sr.reps
+                const kg   = Array.isArray(sr) ? sr[1] : sr.kg
+                const isExtra = !readOnly && si >= (ex.series?.length || 0)
+                return (
+                  <div key={si} style={{ display: 'grid',
+                    gridTemplateColumns: readOnly ? '28px 1fr 1fr' : '22px 1fr 1fr 1fr 1fr 24px',
+                    gap: readOnly ? 6 : 4, marginBottom: 6, alignItems: 'center' }}>
+                    <div style={{ fontSize: 11, color: isExtra ? C.orange : C.muted,
+                      fontWeight: 700, textAlign: 'center' }}>{si + 1}{isExtra ? '+' : ''}</div>
+                    {readOnly ? (
+                      <>
+                        <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
+                          fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'center' }}>{reps || '—'}</div>
+                        <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
+                          fontSize: 12, fontWeight: 700,
+                          color: parseFloat(kg) > 0 ? C.yellow : C.muted, textAlign: 'center' }}>
+                          {parseFloat(kg) > 0 ? `${kg}kg` : '—'}
                         </div>
-                      )
-                    })()}
-                    {/* Blocs réalisés par l'athlète */}
-                    <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>RÉALISÉ</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 1fr 1fr 1fr 1fr 18px', gap: 5, marginBottom: 6, fontSize: 8, color: C.muted, fontWeight: 700, letterSpacing: 1 }}>
-                      <div>#</div>
-                      <div style={{ textAlign: 'center' }}>DURÉE</div>
-                      <div style={{ textAlign: 'center' }}>ALLURE</div>
-                      <div style={{ textAlign: 'center' }}>WATT</div>
-                      <div style={{ textAlign: 'center' }}>KCAL</div>
-                      <div style={{ textAlign: 'center' }}>EFFORT</div>
-                      <div/>
-                    </div>
-                    {(local?.[ei]?.blocs || [{ duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }]).map((bloc, bi) => (
-                      <div key={bi} style={{ display: 'grid', gridTemplateColumns: '18px 1fr 1fr 1fr 1fr 1fr 18px', gap: 5, marginBottom: 6, alignItems: 'center' }}>
-                        <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textAlign: 'center' }}>{bi+1}</div>
-                        <input type="text" inputMode="decimal" value={bloc.duree || ''}
-                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, duree: e.target.value } : b) }))}
-                          placeholder="min"
-                          style={{ background: '#1a1a1a', border: `1px solid ${C.green}`, borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}/>
-                        <input type="text" value={bloc.allure || ''}
-                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, allure: e.target.value } : b) }))}
-                          placeholder="5:30"
-                          style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`, borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}/>
-                        <input type="text" inputMode="decimal" value={bloc.watt || ''}
-                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, watt: e.target.value } : b) }))}
-                          placeholder="W"
-                          style={{ background: '#1a1a1a', border: '1px solid #F2994A', borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: '#F2994A', textAlign: 'center', width: '100%', outline: 'none' }}/>
-                        <input type="text" inputMode="decimal" value={bloc.kcal || ''}
-                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, kcal: e.target.value } : b) }))}
-                          placeholder="kcal"
-                          style={{ background: '#1a1a1a', border: '1px solid #EB5757', borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: '#EB5757', textAlign: 'center', width: '100%', outline: 'none' }}/>
-                        <select value={bloc.effortType || 'EF'}
-                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).map((b, bj) => bj === bi ? { ...b, effortType: e.target.value } : b) }))}
-                          style={{ background: '#1a1a1a', border: `1px solid ${C.orange}`, borderRadius: 5, padding: '7px 3px', fontSize: 10, fontWeight: 700, color: C.orange, textAlign: 'center', width: '100%', outline: 'none' }}>
-                          {CARDIO_EFFORT_TYPES.map(t => <option key={t}>{t}</option>)}
-                        </select>
-                        <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs || []).filter((_, bj) => bj !== bi) }))}
-                          style={{ background: 'none', border: 'none', color: C.muted, fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
-                      </div>
-                    ))}
-                    <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: [...(x.blocs || [{ duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }]), { duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }] }))}
-                      style={{ width: '100%', background: 'none', border: `1px dashed ${C.border}`, borderRadius: 5, color: C.muted, fontSize: 11, fontWeight: 700, padding: '5px', cursor: 'pointer', marginTop: 4, marginBottom: 14, letterSpacing: 1 }}>
-                      + BLOC D'EFFORT
-                    </button>
-                    {/* RPE + remarques */}
-                    <div style={{ paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
-                        {[1,2,3,4,5,6,7,8,9,10].map(v => (
-                          <button key={v}
-                            onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, intensite: String(v) } : x))}
-                            style={{ width: 32, height: 32, borderRadius: 6, border: 'none',
-                              background: local?.[ei]?.intensite === String(v)
-                                ? (v >= 9 ? C.red : v >= 7 ? C.yellow : C.green) : C.border,
-                              color: local?.[ei]?.intensite === String(v) ? (v >= 7 ? C.bg : C.white) : C.muted,
-                              fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
-                            {v}
-                          </button>
-                        ))}
-                      </div>
-                      <textarea
-                        value={local?.[ei]?.remarques || ''}
-                        onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
-                        placeholder="Remarques (sensations, conditions...)"
-                        rows={2}
-                        style={{ width: '100%', background: '#111', border: `1px solid ${C.border}`,
-                          borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text,
-                          resize: 'none', outline: 'none' }}/>
-                    </div>
-                  </div>
-                ) : (
-                  /* Cardio read-only */
-                  <div style={{ fontSize: 12, color: C.muted }}>
-                    {exDisp.cardioType && <div style={{ fontWeight: 700, color: C.red, marginBottom: 8 }}>🏃 {exDisp.cardioType}</div>}
-                    {(() => {
-                      const blocs = exDisp.blocs || (exDisp.duree ? [{ duree: exDisp.duree, allure: exDisp.allure, effortType: exDisp.effortType }] : [])
-                      return blocs.map((b, bi) => (
-                        <div key={bi} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6, padding: '6px 8px', background: '#111', borderRadius: 6 }}>
-                          <span style={{ color: C.muted, fontWeight: 700, fontSize: 10, minWidth: 16 }}>{bi+1}</span>
-                          {b.duree && <span style={{ fontWeight: 700, color: C.green }}>⏱ {b.duree}min</span>}
-                          {b.allure && <span style={{ fontWeight: 700, color: C.yellow }}>@ {b.allure}</span>}
-                          {b.watt && <span style={{ fontWeight: 700, color: '#F2994A' }}>⚡ {b.watt}W</span>}
-                          {b.kcal && <span style={{ fontWeight: 700, color: '#EB5757' }}>🔥 {b.kcal}kcal</span>}
-                          {b.effortType && <span style={{ fontWeight: 700, color: C.orange, padding: '1px 6px', borderRadius: 3, background: 'rgba(242,153,74,.12)', fontSize: 11 }}>{b.effortType}</span>}
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
+                          fontSize: 11, color: C.muted, textAlign: 'center' }}>{prescReps || '—'}</div>
+                        <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
+                          fontSize: 11, color: C.muted, textAlign: 'center' }}>
+                          {parseFloat(prescKg) > 0 ? `${prescKg}` : '—'}
                         </div>
-                      ))
-                    })()}
+                        <input type="number" inputMode="decimal"
+                          value={local?.[ei]?.series?.[si]?.reps || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+                            ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, reps: e.target.value })
+                          }))}
+                          placeholder="reps"
+                          style={{ background: '#1a1a1a', border: `1px solid ${C.green}`,
+                            borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
+                            color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}
+                        />
+                        <input type="number" inputMode="decimal"
+                          value={local?.[ei]?.series?.[si]?.kg || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+                            ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, kg: e.target.value })
+                          }))}
+                          placeholder="kg"
+                          style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`,
+                            borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
+                            color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}
+                        />
+                        <button onClick={() => removeSerieFromExo(ei, si)}
+                          style={{ background: 'none', border: 'none', color: C.muted,
+                            fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+                      </>
+                    )}
                   </div>
                 )
-              ) : (
-                /* ── Musculation fields ── */
-                <>
-                  {/* Headers */}
-                  {readOnly ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr', gap: 6,
-                      marginBottom: 6, fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
-                      <div>#</div>
-                      <div style={{ textAlign: 'center' }}>REPS</div>
-                      <div style={{ textAlign: 'center' }}>KG PRESCRIT</div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid',
-                      gridTemplateColumns: isAdded ? '22px 1fr 1fr 24px' : '22px 1fr 1fr 1fr 1fr',
-                      gap: 5, marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
-                      <div>#</div>
-                      {isAdded ? (
-                        <>
-                          <div style={{ textAlign: 'center', color: C.yellow }}>REPS</div>
-                          <div style={{ textAlign: 'center', color: C.yellow }}>KG</div>
-                          <div />
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ textAlign: 'center' }}>REPS P.</div>
-                          <div style={{ textAlign: 'center' }}>KG P.</div>
-                          <div style={{ textAlign: 'center', color: C.yellow }}>REPS R.</div>
-                          <div style={{ textAlign: 'center', color: C.yellow }}>KG R.</div>
-                        </>
-                      )}
-                    </div>
-                  )}
+              })}
+              {!readOnly && (
+                <button onClick={() => addSerieToExo(ei)}
+                  style={{ width: '100%', background: 'none', border: `1px dashed ${C.orange}`,
+                    borderRadius: 5, color: C.orange, fontSize: 11, fontWeight: 700,
+                    padding: '5px', cursor: 'pointer', marginTop: 4, letterSpacing: 1 }}>
+                  + SÉRIE SUPPLÉMENTAIRE
+                </button>
+              )}
 
-                  {(readOnly ? exDisp.series : local?.[ei]?.series || []).map((sr, si) => {
-                    const prescSr = prescEx?.series?.[si]
-                    const prescReps = prescSr ? (Array.isArray(prescSr) ? prescSr[0] : prescSr.reps) : '—'
-                    const prescKg   = prescSr ? (Array.isArray(prescSr) ? prescSr[1] : prescSr.kg)   : '—'
-                    const reps = Array.isArray(sr) ? sr[0] : sr.reps
-                    const kg   = Array.isArray(sr) ? sr[1] : sr.kg
-                    const isExtraSerie = !readOnly && si >= (prescEx?.series?.length || 0)
-                    return (
-                      <div key={si} style={{ display: 'grid',
-                        gridTemplateColumns: readOnly ? '28px 1fr 1fr'
-                          : isAdded ? '22px 1fr 1fr 24px'
-                          : '22px 1fr 1fr 1fr 1fr 24px',
-                        gap: readOnly ? 6 : 4, marginBottom: 6, alignItems: 'center' }}>
-                        <div style={{ fontSize: 11, color: isExtraSerie ? C.orange : C.muted,
-                          fontWeight: 700, textAlign: 'center' }}>{si + 1}{isExtraSerie ? '+' : ''}</div>
-                        {readOnly ? (
-                          <>
-                            <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
-                              fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'center' }}>{reps || '—'}</div>
-                            <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
-                              fontSize: 12, fontWeight: 700,
-                              color: parseFloat(kg) > 0 ? C.yellow : C.muted, textAlign: 'center' }}>
-                              {parseFloat(kg) > 0 ? `${kg}kg` : '—'}
-                            </div>
-                          </>
-                        ) : isAdded ? (
-                          <>
-                            <input type="number" inputMode="decimal"
-                              value={local?.[ei]?.series?.[si]?.reps || ''}
-                              onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
-                                ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, reps: e.target.value })
-                              }))}
-                              placeholder="reps"
-                              style={{ background: '#1a1a1a', border: `1px solid ${C.green}`,
-                                borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
-                                color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}/>
-                            <input type="number" inputMode="decimal"
-                              value={local?.[ei]?.series?.[si]?.kg || ''}
-                              onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
-                                ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, kg: e.target.value })
-                              }))}
-                              placeholder="kg"
-                              style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`,
-                                borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
-                                color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}/>
-                            <button onClick={() => removeSerieFromExo(ei, si)}
-                              style={{ background: 'none', border: 'none', color: C.muted,
-                                fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
-                          </>
-                        ) : (
-                          <>
-                            <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
-                              fontSize: 11, color: C.muted, textAlign: 'center' }}>{prescReps || '—'}</div>
-                            <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
-                              fontSize: 11, color: C.muted, textAlign: 'center' }}>
-                              {parseFloat(prescKg) > 0 ? `${prescKg}` : '—'}
-                            </div>
-                            <input type="number" inputMode="decimal"
-                              value={local?.[ei]?.series?.[si]?.reps || ''}
-                              onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
-                                ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, reps: e.target.value })
-                              }))}
-                              placeholder="reps"
-                              style={{ background: '#1a1a1a', border: `1px solid ${C.green}`,
-                                borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
-                                color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}/>
-                            <input type="number" inputMode="decimal"
-                              value={local?.[ei]?.series?.[si]?.kg || ''}
-                              onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
-                                ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, kg: e.target.value })
-                              }))}
-                              placeholder="kg"
-                              style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`,
-                                borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
-                                color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}/>
-                            <button onClick={() => removeSerieFromExo(ei, si)}
-                              style={{ background: 'none', border: 'none', color: C.muted,
-                                fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
-                          </>
-                        )}
-                      </div>
-                    )
-                  })}
-                  {!readOnly && (
-                    <button onClick={() => addSerieToExo(ei)}
-                      style={{ width: '100%', background: 'none', border: `1px dashed ${C.orange}`,
-                        borderRadius: 5, color: C.orange, fontSize: 11, fontWeight: 700,
-                        padding: '5px', cursor: 'pointer', marginTop: 4, letterSpacing: 1 }}>
-                      + SÉRIE SUPPLÉMENTAIRE
-                    </button>
-                  )}
-                  {!readOnly && (
-                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
-                        {[1,2,3,4,5,6,7,8,9,10].map(v => (
-                          <button key={v}
-                            onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, intensite: String(v) } : x))}
-                            style={{ width: 32, height: 32, borderRadius: 6, border: 'none',
-                              background: local?.[ei]?.intensite === String(v)
-                                ? (v >= 9 ? C.red : v >= 7 ? C.yellow : C.green) : C.border,
-                              color: local?.[ei]?.intensite === String(v) ? (v >= 7 ? C.bg : C.white) : C.muted,
-                              fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
-                            {v}
-                          </button>
-                        ))}
-                      </div>
-                      <textarea
-                        value={local?.[ei]?.remarques || ''}
-                        onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
-                        placeholder="Remarques (douleurs, sensations...)"
-                        rows={2}
-                        style={{ width: '100%', background: '#111', border: `1px solid ${C.border}`,
-                          borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text,
-                          resize: 'none', outline: 'none' }}/>
-                    </div>
-                  )}
-                </>
+              {!readOnly && (
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+                    {[1,2,3,4,5,6,7,8,9,10].map(v => (
+                      <button key={v}
+                        onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, intensite: String(v) } : x))}
+                        style={{ width: 32, height: 32, borderRadius: 6, border: 'none',
+                          background: local?.[ei]?.intensite === String(v)
+                            ? (v >= 9 ? C.red : v >= 7 ? C.yellow : C.green) : C.border,
+                          color: local?.[ei]?.intensite === String(v) ? (v >= 7 ? C.bg : C.white) : C.muted,
+                          fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    value={local?.[ei]?.remarques || ''}
+                    onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
+                    placeholder="Remarques (douleurs, sensations...)"
+                    rows={2}
+                    style={{ width: '100%', background: '#111', border: `1px solid ${C.border}`,
+                      borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text,
+                      resize: 'none', outline: 'none' }}
+                  />
+                </div>
               )}
             </div>
           </div>
         )
       })}
 
-      {/* Sélecteur de catégorie pour ajouter un exercice */}
       {!readOnly && (
-        addExoCatPicker ? (
-          <div style={{ background: C.card, borderRadius: 10, border: `1px dashed ${C.purple}`,
-            padding: '14px', marginBottom: 80 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.purple, letterSpacing: 2, marginBottom: 12 }}>
-              CHOISIR LA CATÉGORIE
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {CATS.map(cat => {
-                const cc2 = CAT_COLORS[cat] || CAT_COLORS['FULL BODY']
-                return (
-                  <button key={cat} onClick={() => addExoToSeance(cat)}
-                    style={{ padding: '8px 16px', borderRadius: 6, border: 'none',
-                      background: cc2.bg, color: cc2.text,
-                      fontSize: 12, fontWeight: 800, cursor: 'pointer', letterSpacing: 1 }}>
-                    {cat}
-                  </button>
-                )
-              })}
-            </div>
-            <button onClick={() => setAddExoCatPicker(false)}
-              style={{ marginTop: 10, background: 'none', border: 'none', color: C.muted,
-                fontSize: 11, cursor: 'pointer', padding: 0 }}>Annuler</button>
-          </div>
-        ) : (
-          <button onClick={() => setAddExoCatPicker(true)}
+        <button onClick={addExoToSeance}
             style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
               borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
               padding: '10px', cursor: 'pointer', marginBottom: 80, letterSpacing: 1 }}>
             + AJOUTER UN EXERCICE
           </button>
-        )
       )}
 
       </div>
