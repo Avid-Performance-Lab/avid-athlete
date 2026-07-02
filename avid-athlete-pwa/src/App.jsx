@@ -7,17 +7,15 @@ const uid = () => Math.random().toString(36).slice(2, 9)
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const DARK = {
   bg: '#0A0A0A', panel: '#141414', card: '#1C1C1C', border: '#262626',
-  inset: '#111111',
   red: '#EA4335', yellow: '#F2C94C', green: '#27AE60', blue: '#2F80ED',
   purple: '#9B51E0', navy: '#00194C', orange: '#F2994A',
-  text: '#E8E8E8', muted: '#888', white: '#FFF',
+  text: '#E8E8E8', muted: '#666', white: '#FFF',
 }
 const LIGHT = {
-  bg: '#F4F5F7', panel: '#FFFFFF', card: '#FFFFFF', border: '#E5E7EB',
-  inset: '#1C1E22',
-  red: '#E5484D', yellow: '#D4A72C', green: '#1FA956', blue: '#3B7DDB',
-  purple: '#8B5CF6', navy: '#1558B0', orange: '#E08A3C',
-  text: '#16181D', muted: '#6B7280', white: '#FFFFFF',
+  bg: '#F2F2F2', panel: '#FFFFFF', card: '#FAFAFA', border: '#E0E0E0',
+  red: '#C62828', yellow: '#B8860B', green: '#1B6E3A', blue: '#1558B0',
+  purple: '#6A1B9A', navy: '#00194C', orange: '#BF6000',
+  text: '#1A1A1A', muted: '#888', white: '#FFFFFF',
 }
 // C est un objet global mutable — mis à jour avant chaque render dans App()
 const C = Object.assign({}, DARK)
@@ -250,7 +248,7 @@ export default function App() {
             AVID PERFORMANCE LAB
             {isSolo && <span style={{ background: 'rgba(242,196,76,.12)', border: '1px solid rgba(242,196,76,.3)', color: C.yellow, fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 3 }}>SOLO</span>}
           </div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.white, letterSpacing: 1 }}>
             {athlete?.prenom} {athlete?.nom}
           </div>
         </div>
@@ -329,10 +327,11 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     newSem.seances = newSem.seances.map(sea => ({
       ...sea,
       id: uid(),
-      exercices: (sea.exercices||[]).map(ex => ({
+      exercices: sea.exercices.map(ex => ({
         ...ex,
         id: uid(),
-        series: (ex.series||[]).map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
+        // Garder séries prescrites, vider le cahier
+        series: ex.series.map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
       }))
     }))
     const updated = JSON.parse(JSON.stringify(athlete))
@@ -354,10 +353,10 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
       seances: sem.seances.map(sea => ({
         ...sea,
         id: uid(),
-        exercices: (sea.exercices||[]).map(ex => ({
+        exercices: sea.exercices.map(ex => ({
           ...ex,
           id: uid(),
-          series: (ex.series||[]).map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
+          series: ex.series.map(sr => ({ reps: sr.reps ?? 0, kg: sr.kg ?? 0 }))
         }))
       }))
     }))
@@ -505,37 +504,20 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }) {
   const [local, setLocal] = useState(() => {
     if (readOnly) return null
-    return (seance.exercices||[]).map((ex, ei) => {
+    return seance.exercices.map((ex, ei) => {
       const existing = cahierData?.[ei]
       return {
         nom: ex.nom,
         cat: ex.cat,
         series: existing?.series?.length
           ? existing.series
-          : (ex.series||[]).map(() => ({ reps: '', kg: '' })),
+          : ex.series.map(() => ({ reps: '', kg: '' })),
         intensite: existing?.intensite || '',
         remarques: existing?.remarques || '',
       }
     })
   })
   const [saving, setSaving] = useState(false)
-  const cahierDataRef = React.useRef(null)
-
-  // Resync quand cahierData arrive depuis Firebase (async)
-  React.useEffect(() => {
-    if (readOnly || !cahierData) return
-    if (cahierDataRef.current === cahierData) return
-    cahierDataRef.current = cahierData
-    setLocal((seance.exercices||[]).map((ex, ei) => {
-      const existing = cahierData?.[ei]
-      return {
-        nom: ex.nom, cat: ex.cat,
-        series: existing?.series?.length ? existing.series : (ex.series||[]).map(() => ({ reps: '', kg: '' })),
-        intensite: existing?.intensite || '',
-        remarques: existing?.remarques || '',
-      }
-    }))
-  }, [cahierData])
 
   async function handleSave() {
     setSaving(true)
@@ -603,7 +585,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 
       <div style={{ padding: '14px', flex: 1 }}>
 
-      {(readOnly ? (seance.exercices||[]) : (local || [])).map((ex, ei) => {
+      {(readOnly ? seance.exercices : (local || [])).map((ex, ei) => {
         const srcEx = seance.exercices?.[ei] || ex
         const cc = CAT_COLORS[(ex.cat || srcEx.cat)] || CAT_COLORS['FULL BODY']
         // Pour les exercices du programme, utiliser seance.exercices; pour les extras, utiliser local
@@ -612,10 +594,10 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
           <div key={ex.id || ei} style={{ background: C.card, borderRadius: 10, marginBottom: 12,
             border: `1px solid ${C.border}`, overflow: 'hidden' }}>
             <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`,
-              display: 'flex', alignItems: 'center', gap: 10, background: C.inset }}>
+              display: 'flex', alignItems: 'center', gap: 10, background: '#111' }}>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 9, fontWeight: 800,
                 padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{ex.cat}</div>
-              {(!readOnly && ei >= (seance.exercices||[]).length) ? (
+              {(!readOnly && ei >= seance.exercices.length) ? (
                 <input value={local?.[ei]?.nom || ''}
                   onChange={e => updateExoNom(ei, e.target.value)}
                   placeholder="Nom de l'exercice"
@@ -666,9 +648,9 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                       fontWeight: 700, textAlign: 'center' }}>{si + 1}{isExtra ? '+' : ''}</div>
                     {readOnly ? (
                       <>
-                        <div style={{ background: C.inset, borderRadius: 4, padding: '6px 4px',
+                        <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
                           fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'center' }}>{reps || '—'}</div>
-                        <div style={{ background: C.inset, borderRadius: 4, padding: '6px 4px',
+                        <div style={{ background: '#111', borderRadius: 4, padding: '6px 4px',
                           fontSize: 12, fontWeight: 700,
                           color: parseFloat(kg) > 0 ? C.yellow : C.muted, textAlign: 'center' }}>
                           {parseFloat(kg) > 0 ? `${kg}kg` : '—'}
@@ -676,9 +658,9 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                       </>
                     ) : (
                       <>
-                        <div style={{ background: C.inset, borderRadius: 4, padding: '5px 3px',
+                        <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
                           fontSize: 11, color: C.muted, textAlign: 'center' }}>{prescReps || '—'}</div>
-                        <div style={{ background: C.inset, borderRadius: 4, padding: '5px 3px',
+                        <div style={{ background: '#111', borderRadius: 4, padding: '5px 3px',
                           fontSize: 11, color: C.muted, textAlign: 'center' }}>
                           {parseFloat(prescKg) > 0 ? `${prescKg}` : '—'}
                         </div>
@@ -688,7 +670,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                             ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, reps: e.target.value })
                           }))}
                           placeholder="reps"
-                          style={{ background: C.inset, border: `1px solid ${C.green}`,
+                          style={{ background: '#1a1a1a', border: `1px solid ${C.green}`,
                             borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
                             color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}
                         />
@@ -698,7 +680,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                             ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, kg: e.target.value })
                           }))}
                           placeholder="kg"
-                          style={{ background: C.inset, border: `1px solid ${C.yellow}`,
+                          style={{ background: '#1a1a1a', border: `1px solid ${C.yellow}`,
                             borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
                             color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}
                         />
@@ -740,7 +722,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                     onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
                     placeholder="Remarques (douleurs, sensations...)"
                     rows={2}
-                    style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`,
+                    style={{ width: '100%', background: '#111', border: `1px solid ${C.border}`,
                       borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text,
                       resize: 'none', outline: 'none' }}
                   />
@@ -901,7 +883,7 @@ function StatsView({ athlete, cahiers }) {
             <select
               value={selExo}
               onChange={e => setSelExo(e.target.value)}
-              style={{ width: '100%', background: C.inset, border: `1px solid ${C.yellow}`,
+              style={{ width: '100%', background: '#111', border: `1px solid ${C.yellow}`,
                 borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 700,
                 color: C.white, outline: 'none',
                 fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif" }}>
@@ -915,7 +897,7 @@ function StatsView({ athlete, cahiers }) {
           {/* Graphique volume */}
           <div style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
             marginBottom: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: C.text, marginBottom: 2 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.white, marginBottom: 2 }}>
               {selExo === '__tous__' ? 'Volume global' : selExo}
             </div>
             <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>
@@ -1126,7 +1108,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
               value={form[m.key]}
               onChange={e => setForm(f => ({ ...f, [m.key]: e.target.value }))}
               placeholder="0"
-              style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`,
+              style={{ width: '100%', background: '#111', border: `1px solid ${C.border}`,
                 borderRadius: 4, padding: '8px 6px', fontSize: 18, fontWeight: 800,
                 color: m.color, textAlign: 'center', outline: 'none' }}
             />
@@ -1454,7 +1436,7 @@ function PersonalRecords({ athlete, cahiers }) {
           return (
             <div key={nom} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px',
               borderBottom: i < prList.length - 1 ? `1px solid ${C.border}` : 'none',
-              background: i === 0 ? 'rgba(242,196,76,.12)' : 'transparent' }}>
+              background: i === 0 ? '#1a1500' : 'transparent' }}>
               <div style={{ fontSize: 16, flexShrink: 0, width: 20, textAlign: 'center' }}>
                 {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ''}
               </div>
@@ -1518,7 +1500,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
         </div>
         {isSolo && (
           <button onClick={() => setEditing(e => !e)}
-            style={{ marginLeft: 'auto', background: editing ? C.border : 'rgba(242,196,76,.1)', border: '1px solid rgba(242,196,76,.3)', borderRadius: 6, color: '#F2C94C', fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: '6px 12px', cursor: 'pointer', flexShrink: 0 }}>
+            style={{ marginLeft: 'auto', background: editing ? '#333' : 'rgba(242,196,76,.1)', border: '1px solid rgba(242,196,76,.3)', borderRadius: 6, color: '#F2C94C', fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: '6px 12px', cursor: 'pointer', flexShrink: 0 }}>
             {editing ? '✕ Annuler' : '✏ Modifier'}
           </button>
         )}
@@ -1526,7 +1508,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
 
       {/* Formulaire édition solo */}
       {editing && (
-        <div className="fade-in" style={{ background: C.panel, borderRadius: 12, padding: '18px 16px', border: '1px solid rgba(242,196,76,.2)', marginBottom: 16 }}>
+        <div className="fade-in" style={{ background: '#141414', borderRadius: 12, padding: '18px 16px', border: '1px solid rgba(242,196,76,.2)', marginBottom: 16 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#F2C94C', letterSpacing: 2, marginBottom: 14 }}>MODIFIER LE PROFIL</div>
           {[
             { k: 'prenom', l: 'PRÉNOM', ph: 'Prénom' },
@@ -1537,19 +1519,19 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
             <div key={k} style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>{l}</div>
               <input value={form[k]} onChange={e => setF(k, e.target.value)} placeholder={ph}
-                style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
             </div>
           ))}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>TAILLE (cm)</div>
               <input type="number" value={form.taille} onChange={e => setF('taille', e.target.value)}
-                style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>POIDS (kg)</div>
               <input type="number" value={form.poids} onChange={e => setF('poids', e.target.value)}
-                style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
             </div>
           </div>
           <button onClick={handleSaveProfil}
@@ -1635,7 +1617,7 @@ function SoloSetupScreen({ onCreate }) {
   }
 
   const inputStyle = {
-    width: '100%', background: C.inset, border: '1px solid #333',
+    width: '100%', background: '#1a1a1a', border: '1px solid #333',
     borderRadius: 8, padding: '13px 14px', color: '#fff',
     fontSize: 15, fontWeight: 600, outline: 'none',
     fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif",
@@ -1646,7 +1628,7 @@ function SoloSetupScreen({ onCreate }) {
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ background: C.panel, borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ background: '#141414', borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 28, width: 'auto' }} />
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2 }}>AVID PERFORMANCE LAB</div>
@@ -1785,7 +1767,7 @@ function ErrorScreen({ msg, sub }) {
       alignItems: 'center', justifyContent: 'center', background: C.bg, padding: 32 }}>
       <InjectStyles />
       <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 8, textAlign: 'center' }}>{msg}</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 8, textAlign: 'center' }}>{msg}</div>
       <div style={{ fontSize: 13, color: C.muted, textAlign: 'center' }}>{sub}</div>
     </div>
   )
