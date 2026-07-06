@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { db } from './firebase.js'
 import { doc, onSnapshot, collection, query, where, setDoc } from 'firebase/firestore'
 
@@ -519,10 +519,10 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
     })
   })
   const [saving, setSaving] = useState(false)
-  const cahierDataRef = React.useRef(null)
+  const cahierDataRef = useRef(null)
 
   // Resync quand cahierData arrive depuis Firebase (async)
-  React.useEffect(() => {
+  useEffect(() => {
     if (readOnly || !cahierData) return
     if (cahierDataRef.current === cahierData) return
     cahierDataRef.current = cahierData
