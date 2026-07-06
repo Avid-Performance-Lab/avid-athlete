@@ -28,7 +28,12 @@ const CAT_COLORS = {
   TIRAGE:      { bg: '#27AE60', text: '#FFF' },
   'FULL BODY': { bg: '#9B51E0', text: '#FFF' },
   CARDIO:      { bg: '#EA4335', text: '#FFF' },
+  AUTRES:      { bg: '#4A4A4A', text: '#FFF' },
 }
+
+const CARDIO_SUBTYPES = ['Course à pieds', 'Rameur', 'Vélo', 'Ski-Erg']
+const CARDIO_EFFORT_TYPES = ['EF', 'Tempo', 'VMA', 'Fractionné']
+const isCardio = cat => (cat || '').toUpperCase() === 'CARDIO'
 
 function catColor(label = '') {
   const k = label.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ')[0]
@@ -505,28 +510,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }) {
   const [local, setLocal] = useState(() => {
     if (readOnly) return null
-    return (seance.exercices||[]).map((ex, ei) => {
-      const existing = cahierData?.[ei]
-      return {
-        nom: ex.nom,
-        cat: ex.cat,
-        series: existing?.series?.length
-          ? existing.series
-          : (ex.series||[]).map(() => ({ reps: '', kg: '' })),
-        intensite: existing?.intensite || '',
-        remarques: existing?.remarques || '',
-      }
-    })
-  })
-  const [saving, setSaving] = useState(false)
-  const cahierDataRef = useRef(null)
-
-  // Resync quand cahierData arrive depuis Firebase (async)
-  useEffect(() => {
-    if (readOnly || !cahierData) return
-    if (cahierDataRef.current === cahierData) return
-    cahierDataRef.current = cahierData
-    setLocal((seance.exercices||[]).map((ex, ei) => {
+    const base = (seance.exercices||[]).map((ex, ei) => {
       const existing = cahierData?.[ei]
       return {
         nom: ex.nom, cat: ex.cat,
@@ -534,7 +518,41 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
         intensite: existing?.intensite || '',
         remarques: existing?.remarques || '',
       }
-    }))
+    })
+    // Restaurer les exercices ajoutés par l'athlète (au-delà des prescrits)
+    if (cahierData && cahierData.length > (seance.exercices||[]).length) {
+      for (let ei = (seance.exercices||[]).length; ei < cahierData.length; ei++) {
+        const e = cahierData[ei]
+        if (e) base.push({ nom: e.nom||'', cat: e.cat||'FULL BODY', series: e.series||[{reps:'',kg:''}], intensite: e.intensite||'', remarques: e.remarques||'', _added: true })
+      }
+    }
+    return base
+  })
+  const [saving, setSaving] = useState(false)
+  const [addExoCatPicker, setAddExoCatPicker] = useState(false)
+  const cahierDataRef = useRef(null)
+
+  // Resync quand cahierData arrive depuis Firebase (async)
+  useEffect(() => {
+    if (readOnly || !cahierData) return
+    if (cahierDataRef.current === cahierData) return
+    cahierDataRef.current = cahierData
+    const base = (seance.exercices||[]).map((ex, ei) => {
+      const existing = cahierData?.[ei]
+      return {
+        nom: ex.nom, cat: ex.cat,
+        series: existing?.series?.length ? existing.series : (ex.series||[]).map(() => ({ reps: '', kg: '' })),
+        intensite: existing?.intensite || '',
+        remarques: existing?.remarques || '',
+      }
+    })
+    if (cahierData.length > (seance.exercices||[]).length) {
+      for (let ei = (seance.exercices||[]).length; ei < cahierData.length; ei++) {
+        const e = cahierData[ei]
+        if (e) base.push({ nom: e.nom||'', cat: e.cat||'FULL BODY', series: e.series||[{reps:'',kg:''}], intensite: e.intensite||'', remarques: e.remarques||'', _added: true })
+      }
+    }
+    setLocal(base)
   }, [cahierData])
 
   async function handleSave() {
@@ -556,12 +574,22 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
     }))
   }
 
-  function addExoToSeance() {
-    setLocal(prev => [...prev, {
-      nom: '', cat: 'FULL BODY',
-      series: [{ reps: '', kg: '' }, { reps: '', kg: '' }, { reps: '', kg: '' }],
-      intensite: '', remarques: ''
-    }])
+  function addExoToSeance(cat) {
+    setAddExoCatPicker(false)
+    if (isCardio(cat)) {
+      setLocal(prev => [...prev, {
+        nom: '', cat: 'CARDIO',
+        cardioType: '',
+        blocs: [{ duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }],
+        series: [], intensite: '', remarques: '', _added: true,
+      }])
+    } else {
+      setLocal(prev => [...prev, {
+        nom: '', cat: cat || 'FULL BODY',
+        series: [{ reps: '', kg: '' }, { reps: '', kg: '' }, { reps: '', kg: '' }],
+        intensite: '', remarques: '', _added: true,
+      }])
+    }
   }
 
   function removeExoFromSeance(ei) {
@@ -603,42 +631,152 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 
       <div style={{ padding: '14px', flex: 1 }}>
 
-      {(readOnly ? (seance.exercices||[]) : (local || [])).map((ex, ei) => {
-        const srcEx = seance.exercices?.[ei] || ex
-        const cc = CAT_COLORS[(ex.cat || srcEx.cat)] || CAT_COLORS['FULL BODY']
-        // Pour les exercices du programme, utiliser seance.exercices; pour les extras, utiliser local
-        ex = ei < seance.exercices.length ? seance.exercices[ei] : { nom: local?.[ei]?.nom || '', cat: local?.[ei]?.cat || 'FULL BODY', series: [], intensite: '' }
+      {(readOnly ? (seance.exercices||[]) : (local || [])).map((exLocal, ei) => {
+        const prescEx = seance.exercices?.[ei]
+        const isAdded = !readOnly && ei >= (seance.exercices||[]).length
+        const exDisp = readOnly ? exLocal : (local?.[ei] || exLocal)
+        const cc = CAT_COLORS[(exDisp.cat||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(' ')[0]] || CAT_COLORS['FULL BODY']
         return (
-          <div key={ex.id || ei} style={{ background: C.card, borderRadius: 10, marginBottom: 12,
-            border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+          <div key={ei} style={{ background: C.card, borderRadius: 10, marginBottom: 12,
+            border: `1px solid ${isAdded ? C.purple : C.border}`, overflow: 'hidden' }}>
             <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`,
               display: 'flex', alignItems: 'center', gap: 10, background: C.inset }}>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 9, fontWeight: 800,
-                padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{ex.cat}</div>
-              {(!readOnly && ei >= (seance.exercices||[]).length) ? (
+                padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{exDisp.cat}</div>
+              {(!readOnly && isAdded) ? (
                 <input value={local?.[ei]?.nom || ''}
                   onChange={e => updateExoNom(ei, e.target.value)}
                   placeholder="Nom de l'exercice"
                   style={{ background: 'none', border: 'none', borderBottom: `1px solid ${C.yellow}`,
                     fontSize: 13, fontWeight: 800, color: C.white, flex: 1, outline: 'none' }}/>
               ) : (
-                <div style={{ fontSize: 14, fontWeight: 800, color: C.white, flex: 1 }}>{ex.nom}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.white, flex: 1 }}>
+                  {readOnly ? exLocal.nom : (prescEx?.nom || exDisp.nom)}
+                </div>
+              )}
+              {isAdded && !readOnly && (
+                <button onClick={() => removeExoFromSeance(ei)}
+                  style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>×</button>
               )}
               <div style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3,
-                background: ex.intensite >= 9 ? C.red : ex.intensite >= 7 ? C.yellow : C.green,
-                color: ex.intensite >= 7 ? C.bg : C.white }}>
-                RPE {ex.intensite}
+                background: local?.[ei]?.intensite >= 9 ? C.red : local?.[ei]?.intensite >= 7 ? C.yellow : C.border,
+                color: local?.[ei]?.intensite >= 7 ? C.bg : C.muted }}>
+                {local?.[ei]?.intensite ? `RPE ${local[ei].intensite}` : 'RPE —'}
               </div>
             </div>
 
             <div style={{ padding: '10px 14px' }}>
-              {/* Headers */}
+              {isCardio(exDisp.cat) ? (
+                /* ── CARDIO ── */
+                !readOnly ? (
+                  <div>
+                    {/* Sous-type */}
+                    <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>TYPE D'ACTIVITÉ</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                      {CARDIO_SUBTYPES.map(t => (
+                        <button key={t} onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, cardioType: t } : x))}
+                          style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid',
+                            borderColor: local?.[ei]?.cardioType === t ? C.red : C.border,
+                            background: local?.[ei]?.cardioType === t ? 'rgba(234,67,53,.15)' : C.card,
+                            color: local?.[ei]?.cardioType === t ? C.red : C.muted,
+                            fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Blocs effort */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 1fr 1fr 1fr 1fr 18px', gap: 5, marginBottom: 6, fontSize: 8, color: C.muted, fontWeight: 700, letterSpacing: 1 }}>
+                      <div>#</div>
+                      <div style={{ textAlign: 'center' }}>DURÉE</div>
+                      <div style={{ textAlign: 'center' }}>ALLURE</div>
+                      <div style={{ textAlign: 'center' }}>WATT</div>
+                      <div style={{ textAlign: 'center' }}>KCAL</div>
+                      <div style={{ textAlign: 'center' }}>EFFORT</div>
+                      <div/>
+                    </div>
+                    {(local?.[ei]?.blocs || [{ duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }]).map((bloc, bi) => (
+                      <div key={bi} style={{ display: 'grid', gridTemplateColumns: '18px 1fr 1fr 1fr 1fr 1fr 18px', gap: 5, marginBottom: 6, alignItems: 'center' }}>
+                        <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textAlign: 'center' }}>{bi+1}</div>
+                        <input type="text" inputMode="decimal" value={bloc.duree || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs||[]).map((b, bj) => bj === bi ? { ...b, duree: e.target.value } : b) }))}
+                          placeholder="min"
+                          style={{ background: C.inset, border: `1px solid ${C.green}`, borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                        <input type="text" value={bloc.allure || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs||[]).map((b, bj) => bj === bi ? { ...b, allure: e.target.value } : b) }))}
+                          placeholder="5:30"
+                          style={{ background: C.inset, border: `1px solid ${C.yellow}`, borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}/>
+                        <input type="text" inputMode="decimal" value={bloc.watt || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs||[]).map((b, bj) => bj === bi ? { ...b, watt: e.target.value } : b) }))}
+                          placeholder="W"
+                          style={{ background: C.inset, border: '1px solid #F2994A', borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: '#F2994A', textAlign: 'center', width: '100%', outline: 'none' }}/>
+                        <input type="text" inputMode="decimal" value={bloc.kcal || ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs||[]).map((b, bj) => bj === bi ? { ...b, kcal: e.target.value } : b) }))}
+                          placeholder="kcal"
+                          style={{ background: C.inset, border: '1px solid #EB5757', borderRadius: 5, padding: '7px 3px', fontSize: 11, fontWeight: 700, color: '#EB5757', textAlign: 'center', width: '100%', outline: 'none' }}/>
+                        <select value={bloc.effortType || 'EF'}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs||[]).map((b, bj) => bj === bi ? { ...b, effortType: e.target.value } : b) }))}
+                          style={{ background: C.inset, border: `1px solid ${C.orange}`, borderRadius: 5, padding: '7px 3px', fontSize: 10, fontWeight: 700, color: C.orange, width: '100%', outline: 'none' }}>
+                          {CARDIO_EFFORT_TYPES.map(t => <option key={t}>{t}</option>)}
+                        </select>
+                        <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs||[]).filter((_, bj) => bj !== bi) }))}
+                          style={{ background: 'none', border: 'none', color: C.muted, fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+                      </div>
+                    ))}
+                    <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: [...(x.blocs||[]), { duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }] }))}
+                      style={{ width: '100%', background: 'none', border: `1px dashed ${C.border}`, borderRadius: 5, color: C.muted, fontSize: 11, fontWeight: 700, padding: '5px', cursor: 'pointer', marginTop: 4, marginBottom: 14, letterSpacing: 1 }}>
+                      + BLOC D'EFFORT
+                    </button>
+                    {/* RPE + remarques */}
+                    <div style={{ paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+                        {[1,2,3,4,5,6,7,8,9,10].map(v => (
+                          <button key={v} onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, intensite: String(v) } : x))}
+                            style={{ width: 32, height: 32, borderRadius: 6, border: 'none',
+                              background: local?.[ei]?.intensite === String(v) ? (v >= 9 ? C.red : v >= 7 ? C.yellow : C.green) : C.border,
+                              color: local?.[ei]?.intensite === String(v) ? (v >= 7 ? C.bg : C.white) : C.muted,
+                              fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>{v}</button>
+                        ))}
+                      </div>
+                      <textarea value={local?.[ei]?.remarques || ''}
+                        onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
+                        placeholder="Remarques (sensations, conditions...)" rows={2}
+                        style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text, resize: 'none', outline: 'none' }}/>
+                    </div>
+                  </div>
+                ) : (
+                  /* Cardio read-only */
+                  <div style={{ fontSize: 12 }}>
+                    {exDisp.cardioType && <div style={{ fontWeight: 700, color: C.red, marginBottom: 8 }}>🏃 {exDisp.cardioType}</div>}
+                    {(exDisp.blocs || (exDisp.duree ? [{ duree: exDisp.duree, allure: exDisp.allure, effortType: exDisp.effortType }] : [])).map((b, bi) => (
+                      <div key={bi} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6, padding: '6px 8px', background: C.inset, borderRadius: 6 }}>
+                        <span style={{ color: C.muted, fontWeight: 700, fontSize: 10 }}>{bi+1}</span>
+                        {b.duree && <span style={{ fontWeight: 700, color: C.green }}>⏱ {b.duree}min</span>}
+                        {b.allure && <span style={{ fontWeight: 700, color: C.yellow }}>@ {b.allure}</span>}
+                        {b.watt && <span style={{ fontWeight: 700, color: '#F2994A' }}>⚡ {b.watt}W</span>}
+                        {b.kcal && <span style={{ fontWeight: 700, color: '#EB5757' }}>🔥 {b.kcal}kcal</span>}
+                        {b.effortType && <span style={{ fontWeight: 700, color: C.orange, padding: '1px 6px', borderRadius: 3, background: 'rgba(242,153,74,.15)', fontSize: 11 }}>{b.effortType}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                /* ── MUSCULATION ── */
+                <>
               {readOnly ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr', gap: 6,
                   marginBottom: 6, fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
                   <div>#</div>
                   <div style={{ textAlign: 'center' }}>REPS</div>
                   <div style={{ textAlign: 'center' }}>KG PRESCRIT</div>
+                </div>
+              ) : isAdded ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 24px', gap: 5,
+                  marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
+                  <div>#</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>REPS</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>KG</div>
+                  <div/>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 1fr 1fr', gap: 5,
@@ -651,13 +789,13 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                 </div>
               )}
 
-              {(readOnly ? ex.series : local?.[ei]?.series || []).map((sr, si) => {
-                const prescSr = ex.series?.[si]
+              {(readOnly ? (exLocal.series||[]) : (local?.[ei]?.series || [])).map((sr, si) => {
+                const prescSr = prescEx?.series?.[si]
                 const prescReps = prescSr ? (Array.isArray(prescSr) ? prescSr[0] : prescSr.reps) : '—'
                 const prescKg   = prescSr ? (Array.isArray(prescSr) ? prescSr[1] : prescSr.kg)   : '—'
                 const reps = Array.isArray(sr) ? sr[0] : sr.reps
                 const kg   = Array.isArray(sr) ? sr[1] : sr.kg
-                const isExtra = !readOnly && si >= (ex.series?.length || 0)
+                const isExtra = !readOnly && !isAdded && si >= (prescEx?.series?.length || 0)
                 return (
                   <div key={si} style={{ display: 'grid',
                     gridTemplateColumns: readOnly ? '28px 1fr 1fr' : '22px 1fr 1fr 1fr 1fr 24px',
@@ -746,18 +884,56 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                   />
                 </div>
               )}
+              </> {/* fin musculation */}
+              )} {/* fin ternaire isCardio */}
             </div>
           </div>
         )
       })}
 
+      {/* Modal picker catégorie */}
+      {!readOnly && addExoCatPicker && (
+        <div onClick={() => setAddExoCatPicker(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.75)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: C.card, borderRadius: 14, padding: 24, width: '100%', maxWidth: 340,
+              border: `1px solid ${C.purple}` }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.purple, letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>
+              CHOISIR LA CATÉGORIE
+            </div>
+            {[
+              { cat: 'POUSSEE',   label: '🔵 POUSSÉE (Push)', bg: '#2F80ED', color: '#FFF' },
+              { cat: 'TIRAGE',    label: '🟢 TIRAGE (Pull)',  bg: '#27AE60', color: '#FFF' },
+              { cat: 'JAMBES',    label: '🟡 JAMBES (Legs)',  bg: '#F2C94C', color: '#1a1000' },
+              { cat: 'FULL BODY', label: '🟣 FULL BODY',      bg: '#9B51E0', color: '#FFF' },
+              { cat: 'CARDIO',    label: '🔴 CARDIO',         bg: '#EA4335', color: '#FFF' },
+              { cat: 'AUTRES',    label: '⚫ AUTRES',          bg: '#4A4A4A', color: '#FFF' },
+            ].map(({ cat, label, bg, color }) => (
+              <button key={cat} onClick={() => addExoToSeance(cat)}
+                style={{ display: 'block', width: '100%', padding: '12px 16px', borderRadius: 8,
+                  border: 'none', background: bg, color,
+                  fontSize: 13, fontWeight: 800, cursor: 'pointer', letterSpacing: 1,
+                  textAlign: 'left', marginBottom: 8 }}>
+                {label}
+              </button>
+            ))}
+            <button onClick={() => setAddExoCatPicker(false)}
+              style={{ width: '100%', background: 'none', border: `1px solid ${C.border}`,
+                borderRadius: 8, color: C.muted, fontSize: 12, cursor: 'pointer', padding: '8px', marginTop: 4 }}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
       {!readOnly && (
-        <button onClick={addExoToSeance}
-            style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
-              borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
-              padding: '10px', cursor: 'pointer', marginBottom: 80, letterSpacing: 1 }}>
-            + AJOUTER UN EXERCICE
-          </button>
+        <button onClick={() => setAddExoCatPicker(true)}
+          style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
+            borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
+            padding: '10px', cursor: 'pointer', marginBottom: 80, letterSpacing: 1 }}>
+          + AJOUTER UN EXERCICE
+        </button>
       )}
 
       </div>
