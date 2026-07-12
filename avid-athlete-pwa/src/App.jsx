@@ -884,8 +884,8 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                   />
                 </div>
               )}
-              </> {/* fin musculation */}
-              )} {/* fin ternaire isCardio */}
+              </>
+              )}
             </div>
           </div>
         )
