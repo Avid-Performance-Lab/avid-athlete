@@ -891,14 +891,28 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
         )
       })}
 
-      {/* Modal picker catégorie */}
+      {!readOnly && (
+        <button onClick={() => setAddExoCatPicker(true)}
+          style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
+            borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
+            padding: '10px', cursor: 'pointer', marginBottom: 80, letterSpacing: 1 }}>
+          + AJOUTER UN EXERCICE
+        </button>
+      )}
+
+      </div>
+
+      {/* Modal picker catégorie — EN DEHORS du scroll container */}
       {!readOnly && addExoCatPicker && (
-        <div onClick={() => setAddExoCatPicker(false)}
-          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.75)',
+        <div
+          onClick={() => setAddExoCatPicker(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.8)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ background: C.card, borderRadius: 14, padding: 24, width: '100%', maxWidth: 340,
-              border: `1px solid ${C.purple}` }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
+            style={{ background: '#1C1C1C', borderRadius: 14, padding: 24, width: '100%', maxWidth: 340,
+              border: `2px solid ${C.purple}` }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: C.purple, letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>
               CHOISIR LA CATÉGORIE
             </div>
@@ -910,33 +924,23 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
               { cat: 'CARDIO',    label: '🔴 CARDIO',         bg: '#EA4335', color: '#FFF' },
               { cat: 'AUTRES',    label: '⚫ AUTRES',          bg: '#4A4A4A', color: '#FFF' },
             ].map(({ cat, label, bg, color }) => (
-              <button key={cat} onClick={() => addExoToSeance(cat)}
-                style={{ display: 'block', width: '100%', padding: '12px 16px', borderRadius: 8,
+              <button key={cat}
+                onClick={() => addExoToSeance(cat)}
+                style={{ display: 'block', width: '100%', padding: '14px 16px', borderRadius: 8,
                   border: 'none', background: bg, color,
-                  fontSize: 13, fontWeight: 800, cursor: 'pointer', letterSpacing: 1,
-                  textAlign: 'left', marginBottom: 8 }}>
+                  fontSize: 14, fontWeight: 800, cursor: 'pointer', letterSpacing: 1,
+                  textAlign: 'left', marginBottom: 10 }}>
                 {label}
               </button>
             ))}
             <button onClick={() => setAddExoCatPicker(false)}
-              style={{ width: '100%', background: 'none', border: `1px solid ${C.border}`,
-                borderRadius: 8, color: C.muted, fontSize: 12, cursor: 'pointer', padding: '8px', marginTop: 4 }}>
+              style={{ width: '100%', background: 'none', border: '1px solid #333',
+                borderRadius: 8, color: '#888', fontSize: 12, cursor: 'pointer', padding: '10px', marginTop: 4 }}>
               Annuler
             </button>
           </div>
         </div>
       )}
-
-      {!readOnly && (
-        <button onClick={() => setAddExoCatPicker(true)}
-          style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
-            borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
-            padding: '10px', cursor: 'pointer', marginBottom: 80, letterSpacing: 1 }}>
-          + AJOUTER UN EXERCICE
-        </button>
-      )}
-
-      </div>
 
       {/* FAB Sauvegarder — bulle verte flottante bas droite */}
       {!readOnly && (
