@@ -962,260 +962,408 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 }
 
 // ── Stats View ────────────────────────────────────────────────────────────────
-function StatsView({ athlete, cahiers }) {
-  const [selExo, setSelExo] = useState('__tous__')
+// ── Mini graphique SVG propre ──────────────────────────────────────────────────
+function MiniChart({ data, color, height = 80, showLabels = false, yMax = null, yMin = 0, unit = '' }) {
+  const vals = data.map(d => d.v != null ? d.v : null)
+  const valid = vals.filter(v => v !== null)
+  if (valid.length === 0) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 11 }}>—</div>
 
-  // Construire les données de progression par exercice et par semaine
-  const progressData = {}
-  const weeklyGlobal = [] // volume global + RPE moyen par séance
+  const maxV = yMax != null ? yMax : Math.max(...valid) * 1.12 || 1
+  const minV = yMin != null ? yMin : Math.min(...valid) * 0.88
+  const n = data.length
+  const STEP = Math.max(32, Math.min(52, 320 / n))
+  const PL = 2, PR = 8, PT = 18, PB = showLabels ? 22 : 6
+  const W = n <= 1 ? 320 : (n - 1) * STEP + PL + PR
+  const H = height + PT + PB
+  const gW = W - PL - PR
+  const gH = height
+
+  const px = i => PL + (n <= 1 ? gW / 2 : (i / (n - 1)) * gW)
+  const py = v => PT + gH - ((v - minV) / (maxV - minV || 1)) * gH
+
+  const pts = vals.map((v, i) => v != null ? { x: px(i), y: py(v), v, lbl: data[i].lbl } : null)
+  const lpts = pts.filter(p => p)
+
+  const pathD = lpts.length > 1 ? lpts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') : ''
+  const fillD = pathD ? `${pathD} L${lpts[lpts.length-1].x.toFixed(1)},${(PT+gH).toFixed(1)} L${lpts[0].x.toFixed(1)},${(PT+gH).toFixed(1)} Z` : ''
+
+  const maxPt = lpts.reduce((a, b) => b.v > a.v ? b : a, lpts[0])
+  const lastPt = lpts[lpts.length - 1]
+  const labeled = new Set([maxPt?.x, lastPt?.x].filter(Boolean))
+  const xEvery = Math.max(1, Math.ceil(n / 6))
+
+  const fmt = v => v >= 1000 ? `${Math.round(v/1000)}k` : unit === 'rpe' ? v.toFixed(1) : Math.round(v)
+
+  return (
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={Math.max(W, 280)} height={H} style={{ display: 'block' }}>
+        {/* Grille horizontale */}
+        {[0, 0.5, 1].map(t => (
+          <line key={t} x1={PL} x2={W - PR}
+            y1={PT + (1-t)*gH} y2={PT + (1-t)*gH}
+            stroke={C.border} strokeWidth="1" />
+        ))}
+        {/* Fill */}
+        {fillD && <path d={fillD} fill={color} opacity="0.1" />}
+        {/* Ligne */}
+        {pathD && <path d={pathD} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+        {/* Points */}
+        {lpts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={labeled.has(p.x) ? 4 : 2.5} fill={color} />
+        ))}
+        {/* Labels valeurs (max + dernier seulement) */}
+        {lpts.filter(p => labeled.has(p.x)).map((p, i) => (
+          <text key={i} x={p.x} y={p.y - 7} textAnchor="middle"
+            fontSize="10" fill={color} fontWeight="800">{fmt(p.v)}{unit && unit !== 'rpe' ? unit : ''}</text>
+        ))}
+        {/* Labels axe X */}
+        {showLabels && data.map((d, i) => (
+          (i % xEvery === 0 || i === n - 1) && (
+            <text key={i} x={px(i)} y={H - 4} textAnchor="middle"
+              fontSize="9" fill={C.muted}>{d.lbl}</text>
+          )
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+// ── Stats View ─────────────────────────────────────────────────────────────────
+function StatsView({ athlete, cahiers }) {
+  const [tab, setTab] = useState('overview') // 'overview' | 'exercices' | 'regularite'
+  const [selExo, setSelExo] = useState(null)
+
+  // ── Agrégation des données ──
+  const seancesList = []   // { label, lbl, date, vol, rpe, seai }
+  const weekMap = {}        // sem.id → { lbl, vol, rpe[], count }
+  const prMap = {}          // ex.nom → { kg, reps, label }
+  const exoData = {}        // ex.nom → [{ lbl, vol, rpe, kg }]
 
   try {
     athlete?.blocs?.forEach(bloc => {
       bloc.semaines?.forEach(sem => {
+        const semKey = sem.id
         sem.seances?.forEach((sea, seai) => {
           const key = `${athlete.id}-${bloc.id}-${sem.id}-${seai}`
           const cahier = cahiers[key]
           if (!cahier?.data) return
 
-          const label = `${(bloc.label||'').replace('BLOCK ','B')}/${sem.label||''}`
+          const lbl = `${(bloc.label||'').replace('BLOCK ','B')}·${sem.label||''}`
           const date = cahier.updatedAt || 0
 
-          // RPE moyen de la séance — seulement valeurs 1-10
-          const rpeVals = cahier.data
-            .map(c => parseFloat(c.intensite))
-            .filter(v => !isNaN(v) && v >= 1 && v <= 10)
-          const rpeMoyen = rpeVals.length
-            ? Math.round((rpeVals.reduce((s,v)=>s+v,0)/rpeVals.length)*10)/10
-            : null
+          // RPE moyen séance
+          const rpeVals = cahier.data.map(c => parseFloat(c.intensite)).filter(v => !isNaN(v) && v >= 1 && v <= 10)
+          const rpeMoyen = rpeVals.length ? Math.round((rpeVals.reduce((s,v)=>s+v,0)/rpeVals.length)*10)/10 : null
 
-          // Volume total séance
+          // Volume séance
           let volSeance = 0
           sea.exercices?.forEach((ex, ei) => {
             if (!ex?.nom) return
             const cex = cahier.data[ei]
-            if (!cex || !Array.isArray(cex.series)) return
-            const vol = cex.series
-              .filter(s => parseFloat(s.kg)>0 && parseFloat(s.reps)>0)
-              .reduce((s,sr) => s + (parseFloat(sr.reps)||0)*(parseFloat(sr.kg)||0), 0)
+            if (!cex) return
+            const series = Array.isArray(cex.series) ? cex.series : []
+            const validS = series.filter(s => parseFloat(s.kg)>0 && parseFloat(s.reps)>0)
+            const vol = validS.reduce((s,sr) => s+(parseFloat(sr.reps)||0)*(parseFloat(sr.kg)||0), 0)
             if (vol > 0) volSeance += vol
 
-            // RPE exercice — seulement 1-10
+            // PR
+            validS.forEach(s => {
+              const kg = parseFloat(s.kg), reps = parseFloat(s.reps)
+              if (kg > 0 && (!prMap[ex.nom] || kg > prMap[ex.nom].kg)) {
+                prMap[ex.nom] = { kg, reps: reps||null, label: lbl, cat: ex.cat }
+              }
+            })
+
+            // Données par exercice
             const rpeEx = parseFloat(cex.intensite)
             const rpeExOk = (!isNaN(rpeEx) && rpeEx >= 1 && rpeEx <= 10) ? rpeEx : null
-
-            if (!progressData[ex.nom]) progressData[ex.nom] = []
+            const maxKg = validS.length ? Math.max(...validS.map(s=>parseFloat(s.kg)||0)) : 0
             if (vol > 0 || rpeExOk) {
-              progressData[ex.nom].push({ label, date, vol, rpe: rpeExOk, rpeMoyen })
+              if (!exoData[ex.nom]) exoData[ex.nom] = []
+              exoData[ex.nom].push({ lbl, date, v: vol, vol, rpe: rpeExOk, kg: maxKg })
             }
           })
 
-          if (volSeance > 0 || rpeMoyen) {
-            weeklyGlobal.push({ label, date, vol: volSeance, rpe: rpeMoyen })
-          }
+          seancesList.push({ lbl, date, v: volSeance, vol: volSeance, rpe: rpeMoyen })
+
+          // Agrégation par semaine
+          if (!weekMap[semKey]) weekMap[semKey] = { lbl: `${sem.label}`, vol: 0, rpes: [], count: 0 }
+          if (volSeance > 0) weekMap[semKey].vol += volSeance
+          if (rpeMoyen) weekMap[semKey].rpes.push(rpeMoyen)
+          weekMap[semKey].count++
         })
       })
     })
-  } catch(e) { console.error('Stats error:', e) }
+  } catch(e) { console.error('Stats:', e) }
 
-  const exoNames = Object.keys(progressData).filter(k => progressData[k]?.length > 0).sort()
-  const totalDone = Object.keys(cahiers).filter(k =>
-    cahiers[k]?.data?.some(c => Array.isArray(c.series) && c.series.some(s => s.kg))
-  ).length
-  const totalPrescribed = athlete?.blocs?.reduce((s,b) =>
-    s + (b.semaines?.reduce((ss,sem) => ss+(sem.seances?.length||0), 0)||0), 0) || 0
+  const weeklyData = Object.values(weekMap).map(w => ({
+    lbl: w.lbl, v: w.vol, vol: w.vol,
+    rpe: w.rpes.length ? Math.round((w.rpes.reduce((s,v)=>s+v,0)/w.rpes.length)*10)/10 : null,
+    count: w.count
+  }))
 
-  const displayData = selExo === '__tous__'
-    ? weeklyGlobal
-    : (progressData[selExo] || [])
+  const exoNames = Object.keys(exoData).sort()
+  const totalDone = seancesList.length
+  const totalPrescribed = athlete?.blocs?.reduce((s,b)=>s+(b.semaines?.reduce((ss,sem)=>ss+(sem.seances?.length||0),0)||0),0)||0
+  const avgRpe = seancesList.filter(s=>s.rpe).length
+    ? Math.round((seancesList.filter(s=>s.rpe).reduce((s,v)=>s+v.rpe,0)/seancesList.filter(s=>s.rpe).length)*10)/10
+    : null
+  const totalVol = Math.round(seancesList.reduce((s,v)=>s+v.vol,0))
+
+  const prList = Object.entries(prMap).map(([nom,pr])=>({nom,...pr})).sort((a,b)=>b.kg-a.kg)
+
+  const currentExo = selExo && exoData[selExo] ? exoData[selExo] : null
+
+  const TABS = [
+    { k: 'overview', label: 'VUE GLOBALE' },
+    { k: 'exercices', label: 'EXERCICES' },
+    { k: 'regularite', label: 'RÉGULARITÉ' },
+  ]
 
   return (
-    <div className="fade-in" style={{ padding: '16px 14px' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 16 }}>
-        MES STATISTIQUES
-      </div>
+    <div style={{ padding: '16px 14px' }}>
 
-      {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-        {[
-          { l: 'SÉANCES FAITES', v: totalDone, c: C.green },
-          { l: 'EXERCICES SUIVIS', v: exoNames.length, c: C.blue },
-        ].map(({ l, v, c }) => (
-          <div key={l} style={{ background: C.card, borderRadius: 8, padding: '14px 16px', borderTop: `3px solid ${c}` }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: c }}>{v}</div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>{l}</div>
-          </div>
+      {/* ── Tabs ── */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {TABS.map(t => (
+          <button key={t.k} onClick={() => setTab(t.k)}
+            style={{ flex: 1, padding: '7px 4px', borderRadius: 8, border: 'none',
+              background: tab === t.k ? C.yellow : C.card,
+              color: tab === t.k ? '#1a1000' : C.muted,
+              fontSize: 9, fontWeight: 800, cursor: 'pointer', letterSpacing: 0.5 }}>
+            {t.label}
+          </button>
         ))}
       </div>
 
-      {/* Progression globale */}
-      {totalPrescribed > 0 && (
-        <div style={{ background: C.card, borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>PROGRESSION GLOBALE</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.yellow }}>{totalDone}/{totalPrescribed}</span>
-          </div>
-          <div style={{ background: C.border, borderRadius: 4, height: 6, overflow: 'hidden' }}>
-            <div style={{ background: C.green, height: '100%', borderRadius: 4,
-              width: `${Math.min(100,(totalDone/totalPrescribed)*100)}%`, transition: 'width .5s ease' }} />
-          </div>
+      {totalDone === 0 ? (
+        <div style={{ background: C.card, borderRadius: 10, padding: '40px 20px', textAlign: 'center', border: `1px dashed ${C.border}` }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📈</div>
+          <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>Remplis ton cahier d'entraînement<br/><span style={{fontSize:12}}>pour voir tes statistiques ici.</span></div>
         </div>
-      )}
+      ) : tab === 'overview' ? (
 
-      {exoNames.length === 0 ? (
-        <div style={{ background: C.card, borderRadius: 10, padding: '32px 20px', textAlign: 'center',
-          border: `1px dashed ${C.border}` }}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>📈</div>
-          <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.5 }}>
-            Remplis ton cahier d'entraînement<br/>
-            <span style={{ fontSize: 12 }}>pour voir tes statistiques ici.</span>
+        // ════════════════════════════════
+        // TAB VUE GLOBALE
+        // ════════════════════════════════
+        <>
+          {/* KPIs */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+            {[
+              { l: 'SÉANCES', v: totalDone, sub: `/ ${totalPrescribed} prévues`, c: C.green },
+              { l: 'TONNAGE TOTAL', v: totalVol >= 1000 ? `${Math.round(totalVol/1000)}k` : totalVol, sub: 'kg soulevés', c: C.blue },
+              { l: 'RPE MOYEN', v: avgRpe || '—', sub: 'intensité /10', c: avgRpe >= 8 ? C.red : avgRpe >= 6 ? C.yellow : C.green },
+              { l: 'EXERCICES', v: exoNames.length, sub: 'suivis', c: C.purple },
+            ].map(({ l, v, sub, c }) => (
+              <div key={l} style={{ background: C.card, borderRadius: 10, padding: '14px', borderTop: `3px solid ${c}` }}>
+                <div style={{ fontSize: 26, fontWeight: 800, color: c, lineHeight: 1 }}>{v}</div>
+                <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1, marginTop: 4 }}>{l}</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{sub}</div>
+              </div>
+            ))}
           </div>
-        </div>
-      ) : (
+
+          {/* Barre progression */}
+          {totalPrescribed > 0 && (
+            <div style={{ background: C.card, borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>PROGRESSION DU PROGRAMME</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: C.yellow }}>{Math.round((totalDone/totalPrescribed)*100)}%</span>
+              </div>
+              <div style={{ background: C.border, borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                <div style={{ background: `linear-gradient(90deg, ${C.green}, ${C.blue})`, height: '100%', borderRadius: 4,
+                  width: `${Math.min(100,(totalDone/totalPrescribed)*100)}%`, transition: 'width .5s ease' }} />
+              </div>
+            </div>
+          )}
+
+          {/* Volume par semaine */}
+          {weeklyData.filter(w=>w.vol>0).length > 1 && (
+            <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>VOLUME HEBDOMADAIRE</div>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>KG PAR SEMAINE</div>
+              <MiniChart data={weeklyData.filter(w=>w.vol>0)} color={C.blue} height={70} showLabels />
+            </div>
+          )}
+
+          {/* RPE par semaine */}
+          {weeklyData.filter(w=>w.rpe).length > 1 && (
+            <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>INTENSITÉ MOYENNE</div>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>RPE MOYEN PAR SEMAINE</div>
+              <MiniChart data={weeklyData.filter(w=>w.rpe).map(w=>({...w, v:w.rpe}))} color={C.red} height={60} yMax={10} yMin={1} unit="rpe" showLabels />
+            </div>
+          )}
+
+          {/* Top 5 PR */}
+          {prList.length > 0 && (
+            <div style={{ background: C.card, borderRadius: 10, padding: '14px', border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 12 }}>🏆 MEILLEURES CHARGES</div>
+              {prList.slice(0, 5).map((pr, i) => {
+                const cc = CAT_COLORS[(pr.cat||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(' ')[0]] || CAT_COLORS['FULL BODY']
+                return (
+                  <div key={pr.nom} style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 10, marginBottom: 10,
+                    borderBottom: i < Math.min(4, prList.length-1) ? `1px solid ${C.border}` : 'none' }}>
+                    <div style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`}
+                    </div>
+                    <div style={{ background: cc.bg, color: cc.text, fontSize: 7, fontWeight: 800, padding: '2px 5px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{pr.cat||'—'}</div>
+                    <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pr.nom}</div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: i === 0 ? C.yellow : C.text }}>
+                        {pr.kg} kg{pr.reps ? <span style={{ fontSize: 10, color: C.muted, fontWeight: 400 }}> × {pr.reps}</span> : null}
+                      </div>
+                      <div style={{ fontSize: 9, color: C.muted }}>{pr.label}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+
+      ) : tab === 'exercices' ? (
+
+        // ════════════════════════════════
+        // TAB EXERCICES
+        // ════════════════════════════════
         <>
           {/* Sélecteur exercice */}
-          <div style={{ background: C.card, borderRadius: 8, padding: '12px 14px', marginBottom: 16,
-            border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>
-              VOIR LES STATS DE
-            </div>
-            <select
-              value={selExo}
-              onChange={e => setSelExo(e.target.value)}
-              style={{ width: '100%', background: C.inset, border: `1px solid ${C.yellow}`,
-                borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 700,
-                color: C.white, outline: 'none',
+          <div style={{ background: C.card, borderRadius: 8, padding: '12px 14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>CHOISIR UN EXERCICE</div>
+            <select value={selExo || ''} onChange={e => setSelExo(e.target.value || null)}
+              style={{ width: '100%', background: C.inset, border: `1px solid ${C.yellow}`, borderRadius: 6,
+                padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#FFF', outline: 'none',
                 fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif" }}>
-              <option value="__tous__">📊 Vue globale (toutes séances)</option>
-              <optgroup label="── Exercices ──">
-                {exoNames.map(n => <option key={n} value={n}>{n}</option>)}
-              </optgroup>
+              <option value="">— Sélectionner un exercice —</option>
+              {exoNames.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
 
-          {/* Graphique volume */}
-          <div style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
-            marginBottom: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: C.text, marginBottom: 2 }}>
-              {selExo === '__tous__' ? 'Volume global' : selExo}
-            </div>
-            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>
-              VOLUME PAR SÉANCE (kg)
-            </div>
-            <StatLineChart data={displayData} field="vol" color={C.blue} yMax={null} />
-          </div>
-
-          {/* Graphique RPE */}
-          <div style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
-            marginBottom: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>
-              INTENSITÉ RPE (1–10)
-            </div>
-            <StatLineChart data={displayData} field="rpe" color={C.red} yMax={10} yMin={0} />
-          </div>
-
-          {/* Dernier record */}
-          {selExo !== '__tous__' && progressData[selExo]?.length > 0 && (() => {
-            const last = progressData[selExo][progressData[selExo].length - 1]
-            const first = progressData[selExo][0]
-            const volDiff = first.vol > 0 ? Math.round(((last.vol - first.vol)/first.vol)*100) : null
-            return (
-              <div style={{ background: C.card, borderRadius: 8, padding: '12px 14px',
-                border: `1px solid ${C.border}`, marginBottom: 12 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>
-                  RÉSUMÉ — {selExo}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.blue }}>{Math.round(last.vol)}<span style={{fontSize:10}}> kg</span></div>
-                    <div style={{ fontSize: 9, color: C.muted }}>DERNIER VOLUME</div>
-                  </div>
-                  {last.rpe && (
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 800,
-                        color: last.rpe >= 9 ? C.red : last.rpe >= 7 ? C.yellow : C.green }}>
-                        {last.rpe}<span style={{fontSize:10}}>/10</span>
-                      </div>
-                      <div style={{ fontSize: 9, color: C.muted }}>DERNIER RPE</div>
-                    </div>
-                  )}
-                  {volDiff !== null && (
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 800,
-                        color: volDiff >= 0 ? C.green : C.red }}>
-                        {volDiff >= 0 ? '+' : ''}{volDiff}%
-                      </div>
-                      <div style={{ fontSize: 9, color: C.muted }}>ÉVOLUTION</div>
-                    </div>
-                  )}
-                </div>
+          {!selExo ? (
+            /* Liste résumée de tous les PR */
+            <div style={{ background: C.card, borderRadius: 10, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+              <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.text }}>🏆 TOUS LES RECORDS</div>
               </div>
-            )
-          })()}
+              {prList.map((pr, i) => {
+                const cc = CAT_COLORS[(pr.cat||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(' ')[0]] || CAT_COLORS['FULL BODY']
+                return (
+                  <div key={pr.nom} onClick={() => setSelExo(pr.nom)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                      borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}>
+                    <div style={{ background: cc.bg, color: cc.text, fontSize: 7, fontWeight: 800, padding: '2px 5px', borderRadius: 3, flexShrink: 0 }}>{pr.cat||'—'}</div>
+                    <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pr.nom}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.yellow, flexShrink: 0 }}>
+                      {pr.kg} kg{pr.reps ? <span style={{ fontSize: 10, color: C.muted }}> ×{pr.reps}</span> : null}
+                    </div>
+                    <div style={{ color: C.muted, fontSize: 12 }}>›</div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : currentExo ? (
+            <>
+              {/* Résumé exercice */}
+              {(() => {
+                const last = currentExo[currentExo.length - 1]
+                const first = currentExo[0]
+                const bestKg = Math.max(...currentExo.map(d=>d.kg||0))
+                const bestReps = prMap[selExo]?.reps
+                const volDiff = first.vol > 0 ? Math.round(((last.vol-first.vol)/first.vol)*100) : null
+                return (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+                      <div style={{ background: C.card, borderRadius: 10, padding: '12px', borderTop: `3px solid ${C.yellow}` }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: C.yellow }}>{bestKg}<span style={{fontSize:10}}> kg</span></div>
+                        {bestReps && <div style={{ fontSize: 9, color: C.muted }}>× {bestReps} reps</div>}
+                        <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>MEILLEURE CHARGE</div>
+                      </div>
+                      {last.rpe && (
+                        <div style={{ background: C.card, borderRadius: 10, padding: '12px', borderTop: `3px solid ${last.rpe>=8?C.red:last.rpe>=6?C.yellow:C.green}` }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: last.rpe>=8?C.red:last.rpe>=6?C.yellow:C.green }}>{last.rpe}</div>
+                          <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>DERNIER RPE</div>
+                        </div>
+                      )}
+                      {volDiff !== null && (
+                        <div style={{ background: C.card, borderRadius: 10, padding: '12px', borderTop: `3px solid ${volDiff>=0?C.green:C.red}` }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: volDiff>=0?C.green:C.red }}>{volDiff>=0?'+':''}{volDiff}%</div>
+                          <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>ÉVOLUTION VOL.</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Courbe volume exo */}
+                    {currentExo.length > 1 && (
+                      <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{selExo}</div>
+                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>VOLUME PAR SÉANCE (kg)</div>
+                        <MiniChart data={currentExo} color={C.blue} height={70} showLabels />
+                      </div>
+                    )}
+
+                    {/* Courbe charge max exo */}
+                    {currentExo.filter(d=>d.kg>0).length > 1 && (
+                      <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>CHARGE MAXIMALE</div>
+                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>KG PAR SÉANCE</div>
+                        <MiniChart data={currentExo.filter(d=>d.kg>0).map(d=>({...d,v:d.kg}))} color={C.yellow} height={60} showLabels />
+                      </div>
+                    )}
+
+                    {/* Courbe RPE exo */}
+                    {currentExo.filter(d=>d.rpe).length > 1 && (
+                      <div style={{ background: C.card, borderRadius: 10, padding: '14px', border: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>INTENSITÉ RESSENTIE</div>
+                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>RPE PAR SÉANCE</div>
+                        <MiniChart data={currentExo.filter(d=>d.rpe).map(d=>({...d,v:d.rpe}))} color={C.red} height={60} yMax={10} yMin={1} unit="rpe" showLabels />
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+
+              <button onClick={() => setSelExo(null)}
+                style={{ width: '100%', background: 'none', border: `1px solid ${C.border}`, borderRadius: 8,
+                  color: C.muted, fontSize: 11, padding: '10px', cursor: 'pointer', marginTop: 12 }}>
+                ← Tous les exercices
+              </button>
+            </>
+          ) : null}
+        </>
+
+      ) : (
+
+        // ════════════════════════════════
+        // TAB RÉGULARITÉ
+        // ════════════════════════════════
+        <>
+          {/* Séances par semaine */}
+          <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>SÉANCES PAR SEMAINE</div>
+            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>RÉGULARITÉ D'ENTRAÎNEMENT</div>
+            <MiniChart data={Object.values(weekMap).map(w=>({lbl:w.lbl, v:w.count}))} color={C.green} height={70} showLabels />
+          </div>
+
+          {/* Volume par séance individuelle */}
+          {seancesList.length > 1 && (
+            <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>VOLUME PAR SÉANCE</div>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>KG SOULEVÉS (toutes séances)</div>
+              <MiniChart data={seancesList.filter(s=>s.vol>0)} color={C.blue} height={70} showLabels />
+            </div>
+          )}
+
+          {/* RPE par séance individuelle */}
+          {seancesList.filter(s=>s.rpe).length > 1 && (
+            <div style={{ background: C.card, borderRadius: 10, padding: '14px', border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>INTENSITÉ PAR SÉANCE</div>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>RPE RESSENTI</div>
+              <MiniChart data={seancesList.filter(s=>s.rpe).map(s=>({...s,v:s.rpe}))} color={C.red} height={70} yMax={10} yMin={1} unit="rpe" showLabels />
+            </div>
+          )}
         </>
       )}
-    </div>
-  )
-}
-
-// Courbe SVG simple
-function StatLineChart({ data, field, color, yMax = null, yMin = 0 }) {
-  const vals = data.map(d => d[field] != null ? d[field] : null)
-  const validVals = vals.filter(v => v !== null)
-  if (validVals.length === 0) return (
-    <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: C.muted, fontSize: 11 }}>Pas encore de données</div>
-  )
-  const maxV = yMax !== null ? yMax : Math.max(...validVals) * 1.1 || 1
-  const minV = yMin !== null ? yMin : Math.min(...validVals) * 0.9
-  const W = 300, H = 80, PAD = 6
-  const n = data.length
-  const x = (i) => PAD + (i / Math.max(n - 1, 1)) * (W - PAD * 2)
-  const y = (v) => H - PAD - ((v - minV) / (maxV - minV || 1)) * (H - PAD * 2)
-
-  const points = vals.map((v, i) => v !== null ? { x: x(i), y: y(v), v, label: data[i].label } : null)
-  const linePoints = points.filter(p => p !== null)
-
-  const pathD = linePoints.length > 1
-    ? linePoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-    : ''
-
-  // Zone fill
-  const fillD = linePoints.length > 1
-    ? `${pathD} L${linePoints[linePoints.length-1].x.toFixed(1)},${(H-PAD)} L${linePoints[0].x.toFixed(1)},${(H-PAD)} Z`
-    : ''
-
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <svg viewBox={`0 0 ${W} ${H + 16}`} width="100%" style={{ display: 'block', minWidth: `${Math.max(200, n * 28)}px` }}>
-        {/* Lignes grille */}
-        {[0.25, 0.5, 0.75, 1].map(t => (
-          <line key={t} x1={PAD} x2={W-PAD}
-            y1={PAD + (1-t)*(H-PAD*2)} y2={PAD + (1-t)*(H-PAD*2)}
-            stroke="#222" strokeWidth="1" />
-        ))}
-        {/* Zone fill */}
-        {fillD && <path d={fillD} fill={color} opacity="0.08" />}
-        {/* Ligne */}
-        {pathD && <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
-        {/* Points */}
-        {linePoints.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="3" fill={color} />
-        ))}
-        {/* Valeurs */}
-        {linePoints.map((p, i) => (
-          <text key={i} x={p.x} y={p.y - 6} textAnchor="middle"
-            fontSize="7" fill={color} fontWeight="700">
-            {field === 'rpe' ? p.v : Math.round(p.v)}
-          </text>
-        ))}
-        {/* Labels axe X */}
-        {data.map((d, i) => (
-          <text key={i} x={x(i)} y={H + 12} textAnchor="middle"
-            fontSize="6.5" fill="#444">
-            {d.label}
-          </text>
-        ))}
-      </svg>
     </div>
   )
 }
