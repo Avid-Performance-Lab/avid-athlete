@@ -1987,7 +1987,72 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
         </div>
       )}
 
-      <PersonalRecords athlete={athlete} cahiers={cahiers} />
+      {/* ── Stats globales compactes ── */}
+      {(() => {
+        // Calcul rapide depuis cahiers
+        let totalDone = 0, totalVol = 0, rpeVals = [], prTop = null
+        try {
+          athlete.blocs?.forEach(bloc => {
+            bloc.semaines?.forEach(sem => {
+              sem.seances?.forEach((sea, seai) => {
+                const key = `${athlete.id}-${bloc.id}-${sem.id}-${seai}`
+                const cahier = cahiers[key]
+                if (!cahier?.data) return
+                totalDone++
+                cahier.data.forEach((cex, ei) => {
+                  const ex = sea.exercices?.[ei]
+                  ;(cex.series || []).filter(s => parseFloat(s.kg) > 0 && parseFloat(s.reps) > 0).forEach(s => {
+                    const kg = parseFloat(s.kg), reps = parseFloat(s.reps)
+                    totalVol += kg * reps
+                    if (!prTop || kg > prTop.kg) prTop = { kg, reps, nom: ex?.nom || '' }
+                  })
+                  const rpe = parseFloat(cex.intensite)
+                  if (!isNaN(rpe) && rpe >= 1 && rpe <= 10) rpeVals.push(rpe)
+                })
+              })
+            })
+          })
+        } catch(e) {}
+
+        const avgRpe = rpeVals.length ? Math.round((rpeVals.reduce((s,v)=>s+v,0)/rpeVals.length)*10)/10 : null
+        const volFmt = totalVol >= 1000000 ? `${Math.round(totalVol/1000000)}M` : totalVol >= 1000 ? `${Math.round(totalVol/1000)}k` : Math.round(totalVol)
+        const oneRM = prTop?.reps > 1 ? Math.round(prTop.kg * (1 + prTop.reps / 30)) : prTop?.kg
+
+        if (totalDone === 0) return null
+
+        return (
+          <div style={{ background: C.card, borderRadius: 12, padding: '16px', border: `1px solid ${C.border}`, marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 14 }}>MES STATS</div>
+            {/* KPIs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
+              {[
+                { l: 'SÉANCES', v: totalDone, c: C.green },
+                { l: 'TONNAGE', v: volFmt + ' kg', c: C.blue },
+                { l: 'RPE MOY.', v: avgRpe || '—', c: avgRpe >= 8 ? C.red : C.yellow },
+              ].map(({ l, v, c }) => (
+                <div key={l} style={{ background: C.bg, borderRadius: 8, padding: '10px 12px', borderTop: `3px solid ${c}` }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: c, lineHeight: 1 }}>{v}</div>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1, marginTop: 4 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+            {/* Meilleure perf */}
+            {prTop && (
+              <div style={{ background: C.bg, borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ fontSize: 22 }}>🏆</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1 }}>MEILLEURE CHARGE</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prTop.nom}</div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.yellow }}>{prTop.kg} kg <span style={{ fontSize: 11, color: C.muted }}>×{prTop.reps}</span></div>
+                  {oneRM && oneRM !== prTop.kg && <div style={{ fontSize: 10, color: C.purple }}>~{oneRM} kg 1RM</div>}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       <div style={{ marginTop: 20, background: '#0a1020', borderRadius: 10, padding: '14px 16px',
         border: `1px solid ${C.blue}` }}>
