@@ -1122,6 +1122,20 @@ function StatsView({ athlete, cahiers }) {
     return { nom, ...pr, oneRM }
   }).sort((a,b) => b.kg - a.kg)
 
+  // Top 3 PR par groupe musculaire principal
+  const GROUP_KEYS = [
+    { k: 'JAMBES',  label: 'Jambes',  color: '#F2C94C', textColor: '#1a1000' },
+    { k: 'POUSSEE', label: 'Poussée', color: '#2F80ED', textColor: '#FFF' },
+    { k: 'TIRAGE',  label: 'Tirage',  color: '#27AE60', textColor: '#FFF' },
+  ]
+  const prByGroup = GROUP_KEYS.map(g => {
+    const top3 = prList.filter(pr => {
+      const k = (pr.cat||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(' ')[0]
+      return k === g.k
+    }).slice(0, 3)
+    return { ...g, top3 }
+  }).filter(g => g.top3.length > 0)
+
   const currentExo = selExo && exoData[selExo] ? exoData[selExo] : null
 
   const TABS = [
@@ -1248,32 +1262,37 @@ function StatsView({ athlete, cahiers }) {
             )
           })()}
 
-          {/* Top 5 PR */}
-          {prList.length > 0 && (
-            <div style={{ background: C.card, borderRadius: 10, padding: '14px', border: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 12 }}>🏆 MEILLEURES CHARGES</div>
-              {prList.slice(0, 5).map((pr, i) => {
-                const cc = CAT_COLORS[(pr.cat||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(' ')[0]] || CAT_COLORS['FULL BODY']
-                return (
-                  <div key={pr.nom} style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 10, marginBottom: 10,
-                    borderBottom: i < Math.min(4, prList.length-1) ? `1px solid ${C.border}` : 'none' }}>
-                    <div style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>
-                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`}
+          {/* 3 podiums séparés par groupe musculaire */}
+          {prByGroup.map(g => (
+            <div key={g.k} style={{ background: C.card, borderRadius: 10, padding: '14px',
+              border: `1px solid ${C.border}`, borderTop: `3px solid ${g.color}`, marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ background: g.color, color: g.textColor, fontSize: 9, fontWeight: 800,
+                  padding: '2px 8px', borderRadius: 3, letterSpacing: 1 }}>{g.label.toUpperCase()}</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.text }}>TOP CHARGES</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {g.top3.map((pr, i) => (
+                  <div key={pr.nom} style={{ display: 'flex', alignItems: 'center', gap: 10,
+                    background: C.bg, borderRadius: 8, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 18, width: 24, flexShrink: 0, textAlign: 'center' }}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
                     </div>
-                    <div style={{ background: cc.bg, color: cc.text, fontSize: 7, fontWeight: 800, padding: '2px 5px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{pr.cat||'—'}</div>
-                    <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pr.nom}</div>
+                    <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: C.text,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pr.nom}</div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: i === 0 ? C.yellow : C.text }}>
-                        {pr.kg} kg{pr.reps ? <span style={{ fontSize: 10, color: C.muted, fontWeight: 400 }}> × {pr.reps}</span> : null}
-                        {pr.oneRM && pr.oneRM !== pr.kg && <span style={{ fontSize: 10, color: C.purple, marginLeft: 5 }}>~{pr.oneRM} kg 1RM</span>}
+                      <div style={{ fontSize: 15, fontWeight: 800, color: i === 0 ? g.color : C.text }}>
+                        {pr.kg} kg
+                        {pr.reps ? <span style={{ fontSize: 10, color: C.muted, fontWeight: 400 }}> × {pr.reps}</span> : null}
                       </div>
-                      <div style={{ fontSize: 9, color: C.muted }}>{pr.label}</div>
+                      {pr.oneRM && pr.oneRM !== pr.kg &&
+                        <div style={{ fontSize: 9, color: C.purple }}>~{pr.oneRM} kg 1RM</div>}
                     </div>
                   </div>
-                )
-              })}
+                ))}
+              </div>
             </div>
-          )}
+          ))}
         </>
 
       ) : tab === 'exercices' ? (
@@ -1990,7 +2009,8 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
       {/* ── Stats globales compactes ── */}
       {(() => {
         // Calcul rapide depuis cahiers
-        let totalDone = 0, totalVol = 0, rpeVals = [], prTop = null
+        let totalDone = 0, totalVol = 0, rpeVals = []
+        const prMapLocal = {}
         try {
           athlete.blocs?.forEach(bloc => {
             bloc.semaines?.forEach(sem => {
@@ -2004,7 +2024,8 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
                   ;(cex.series || []).filter(s => parseFloat(s.kg) > 0 && parseFloat(s.reps) > 0).forEach(s => {
                     const kg = parseFloat(s.kg), reps = parseFloat(s.reps)
                     totalVol += kg * reps
-                    if (!prTop || kg > prTop.kg) prTop = { kg, reps, nom: ex?.nom || '' }
+                    if (ex?.nom && (!prMapLocal[ex.nom] || kg > prMapLocal[ex.nom].kg))
+                      prMapLocal[ex.nom] = { kg, reps, nom: ex.nom, cat: ex.cat }
                   })
                   const rpe = parseFloat(cex.intensite)
                   if (!isNaN(rpe) && rpe >= 1 && rpe <= 10) rpeVals.push(rpe)
@@ -2016,7 +2037,20 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
 
         const avgRpe = rpeVals.length ? Math.round((rpeVals.reduce((s,v)=>s+v,0)/rpeVals.length)*10)/10 : null
         const volFmt = totalVol >= 1000000 ? `${Math.round(totalVol/1000000)}M` : totalVol >= 1000 ? `${Math.round(totalVol/1000)}k` : Math.round(totalVol)
-        const oneRM = prTop?.reps > 1 ? Math.round(prTop.kg * (1 + prTop.reps / 30)) : prTop?.kg
+
+        const GROUP_KEYS_P = [
+          { k: 'JAMBES',  label: 'Jambes',  color: '#F2C94C', textColor: '#1a1000' },
+          { k: 'POUSSEE', label: 'Poussée', color: '#2F80ED', textColor: '#FFF' },
+          { k: 'TIRAGE',  label: 'Tirage',  color: '#27AE60', textColor: '#FFF' },
+        ]
+        const allPrs = Object.values(prMapLocal).sort((a,b) => b.kg - a.kg)
+        const prByGroupP = GROUP_KEYS_P.map(g => {
+          const best = allPrs.find(pr => {
+            const k = (pr.cat||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(' ')[0]
+            return k === g.k
+          })
+          return { ...g, pr: best || null }
+        }).filter(g => g.pr)
 
         if (totalDone === 0) return null
 
@@ -2036,19 +2070,33 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
                 </div>
               ))}
             </div>
-            {/* Meilleure perf */}
-            {prTop && (
-              <div style={{ background: C.bg, borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ fontSize: 22 }}>🏆</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: 1 }}>MEILLEURE CHARGE</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prTop.nom}</div>
+            {/* Podium par groupe */}
+            {prByGroupP.length > 0 && (
+              <>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>MEILLEURES CHARGES</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {prByGroupP.map((g, i) => {
+                    const oneRM = g.pr.reps > 1 ? Math.round(g.pr.kg * (1 + g.pr.reps / 30)) : g.pr.kg
+                    return (
+                      <div key={g.k} style={{ display: 'flex', alignItems: 'center', gap: 8,
+                        background: C.bg, borderRadius: 7, padding: '8px 10px',
+                        borderLeft: `3px solid ${g.color}` }}>
+                        <div style={{ fontSize: 16, flexShrink: 0 }}>{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</div>
+                        <div style={{ background: g.color, color: g.textColor, fontSize: 7, fontWeight: 800,
+                          padding: '2px 6px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{g.label.toUpperCase()}</div>
+                        <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: C.text,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.pr.nom}</div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: g.color }}>
+                            {g.pr.kg} kg<span style={{ fontSize: 9, color: C.muted }}> ×{g.pr.reps}</span>
+                          </div>
+                          {oneRM !== g.pr.kg && <div style={{ fontSize: 9, color: C.purple }}>~{oneRM} 1RM</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.yellow }}>{prTop.kg} kg <span style={{ fontSize: 11, color: C.muted }}>×{prTop.reps}</span></div>
-                  {oneRM && oneRM !== prTop.kg && <div style={{ fontSize: 10, color: C.purple }}>~{oneRM} kg 1RM</div>}
-                </div>
-              </div>
+              </>
             )}
           </div>
         )
