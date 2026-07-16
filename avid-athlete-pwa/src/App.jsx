@@ -1038,6 +1038,7 @@ function StatsView({ athlete, cahiers }) {
   const weekMap = {}        // sem.id → { lbl, vol, rpe[], count }
   const prMap = {}          // ex.nom → { kg, reps, label }
   const exoData = {}        // ex.nom → [{ lbl, vol, rpe, kg }]
+  const catVol = {}         // cat → tonnage total
 
   try {
     athlete?.blocs?.forEach(bloc => {
@@ -1065,6 +1066,12 @@ function StatsView({ athlete, cahiers }) {
             const validS = series.filter(s => parseFloat(s.kg)>0 && parseFloat(s.reps)>0)
             const vol = validS.reduce((s,sr) => s+(parseFloat(sr.reps)||0)*(parseFloat(sr.kg)||0), 0)
             if (vol > 0) volSeance += vol
+
+            // Tonnage par groupe musculaire
+            if (vol > 0 && ex.cat) {
+              const g = ex.cat.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(' ')[0]
+              catVol[g] = (catVol[g] || 0) + vol
+            }
 
             // PR
             validS.forEach(s => {
@@ -1110,7 +1117,10 @@ function StatsView({ athlete, cahiers }) {
     : null
   const totalVol = Math.round(seancesList.reduce((s,v)=>s+v.vol,0))
 
-  const prList = Object.entries(prMap).map(([nom,pr])=>({nom,...pr})).sort((a,b)=>b.kg-a.kg)
+  const prList = Object.entries(prMap).map(([nom,pr]) => {
+    const oneRM = pr.reps && pr.reps > 1 ? Math.round(pr.kg * (1 + pr.reps / 30)) : pr.kg
+    return { nom, ...pr, oneRM }
+  }).sort((a,b) => b.kg - a.kg)
 
   const currentExo = selExo && exoData[selExo] ? exoData[selExo] : null
 
@@ -1195,6 +1205,49 @@ function StatsView({ athlete, cahiers }) {
             </div>
           )}
 
+          {/* Tonnage par groupe musculaire */}
+          {Object.keys(catVol).length > 0 && (() => {
+            const groups = [
+              { k: 'JAMBES',   label: 'Jambes',    color: '#F2C94C' },
+              { k: 'POUSSEE',  label: 'Poussée',   color: '#2F80ED' },
+              { k: 'TIRAGE',   label: 'Tirage',    color: '#27AE60' },
+              { k: 'FULL',     label: 'Full Body', color: '#9B51E0' },
+              { k: 'CARDIO',   label: 'Cardio',    color: '#EA4335' },
+              { k: 'AUTRES',   label: 'Autres',    color: '#4A4A4A' },
+            ].filter(g => catVol[g.k] > 0)
+            const totalCat = groups.reduce((s,g) => s + (catVol[g.k]||0), 0)
+            return (
+              <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>TONNAGE PAR GROUPE MUSCULAIRE</div>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 14 }}>RÉPARTITION DU VOLUME TOTAL</div>
+                {/* Barre empilée */}
+                <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', height: 14, marginBottom: 14 }}>
+                  {groups.map(g => (
+                    <div key={g.k} style={{
+                      width: `${Math.round((catVol[g.k]/totalCat)*100)}%`,
+                      background: g.color, height: '100%', minWidth: catVol[g.k] > 0 ? 2 : 0
+                    }}/>
+                  ))}
+                </div>
+                {/* Légende */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px' }}>
+                  {groups.map(g => {
+                    const pct = Math.round((catVol[g.k]/totalCat)*100)
+                    const kg = catVol[g.k] >= 1000 ? `${Math.round(catVol[g.k]/1000)}k` : Math.round(catVol[g.k])
+                    return (
+                      <div key={g.k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div style={{ width: 9, height: 9, borderRadius: 2, background: g.color, flexShrink: 0 }}/>
+                        <span style={{ fontSize: 11, color: C.text, fontWeight: 700 }}>{g.label}</span>
+                        <span style={{ fontSize: 11, color: g.color, fontWeight: 800 }}>{pct}%</span>
+                        <span style={{ fontSize: 10, color: C.muted }}>{kg} kg</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Top 5 PR */}
           {prList.length > 0 && (
             <div style={{ background: C.card, borderRadius: 10, padding: '14px', border: `1px solid ${C.border}` }}>
@@ -1212,6 +1265,7 @@ function StatsView({ athlete, cahiers }) {
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <div style={{ fontSize: 16, fontWeight: 800, color: i === 0 ? C.yellow : C.text }}>
                         {pr.kg} kg{pr.reps ? <span style={{ fontSize: 10, color: C.muted, fontWeight: 400 }}> × {pr.reps}</span> : null}
+                        {pr.oneRM && pr.oneRM !== pr.kg && <span style={{ fontSize: 10, color: C.purple, marginLeft: 5 }}>~{pr.oneRM} kg 1RM</span>}
                       </div>
                       <div style={{ fontSize: 9, color: C.muted }}>{pr.label}</div>
                     </div>
