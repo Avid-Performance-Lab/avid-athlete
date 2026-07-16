@@ -1308,8 +1308,11 @@ function StatsView({ athlete, cahiers }) {
                       borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}>
                     <div style={{ background: cc.bg, color: cc.text, fontSize: 7, fontWeight: 800, padding: '2px 5px', borderRadius: 3, flexShrink: 0 }}>{pr.cat||'—'}</div>
                     <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pr.nom}</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.yellow, flexShrink: 0 }}>
-                      {pr.kg} kg{pr.reps ? <span style={{ fontSize: 10, color: C.muted }}> ×{pr.reps}</span> : null}
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: C.yellow }}>
+                        {pr.kg} kg{pr.reps ? <span style={{ fontSize: 10, color: C.muted }}> ×{pr.reps}</span> : null}
+                      </div>
+                      {pr.oneRM && pr.oneRM !== pr.kg && <div style={{ fontSize: 10, color: C.purple }}>~{pr.oneRM} kg 1RM</div>}
                     </div>
                     <div style={{ color: C.muted, fontSize: 12 }}>›</div>
                   </div>
