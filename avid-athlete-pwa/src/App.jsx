@@ -2070,28 +2070,25 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
                 </div>
               ))}
             </div>
-            {/* Podium par groupe */}
+            {/* Meilleures charges — tableau 3 colonnes */}
             {prByGroupP.length > 0 && (
               <>
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>MEILLEURES CHARGES</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {prByGroupP.map((g, i) => {
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${prByGroupP.length},1fr)`, gap: 8 }}>
+                  {prByGroupP.map(g => {
                     const oneRM = g.pr.reps > 1 ? Math.round(g.pr.kg * (1 + g.pr.reps / 30)) : g.pr.kg
                     return (
-                      <div key={g.k} style={{ display: 'flex', alignItems: 'center', gap: 8,
-                        background: C.bg, borderRadius: 7, padding: '8px 10px',
-                        borderLeft: `3px solid ${g.color}` }}>
-                        <div style={{ fontSize: 16, flexShrink: 0 }}>{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</div>
+                      <div key={g.k} style={{ background: C.bg, borderRadius: 8, padding: '10px 8px',
+                        borderTop: `3px solid ${g.color}`, textAlign: 'center' }}>
                         <div style={{ background: g.color, color: g.textColor, fontSize: 7, fontWeight: 800,
-                          padding: '2px 6px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{g.label.toUpperCase()}</div>
-                        <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: C.text,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.pr.nom}</div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: g.color }}>
-                            {g.pr.kg} kg<span style={{ fontSize: 9, color: C.muted }}> ×{g.pr.reps}</span>
-                          </div>
-                          {oneRM !== g.pr.kg && <div style={{ fontSize: 9, color: C.purple }}>~{oneRM} 1RM</div>}
+                          padding: '2px 6px', borderRadius: 3, letterSpacing: 1, display: 'inline-block', marginBottom: 6 }}>
+                          {g.label.toUpperCase()}
                         </div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.text, marginBottom: 4,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.pr.nom}</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: g.color }}>{g.pr.kg} kg</div>
+                        <div style={{ fontSize: 9, color: C.muted }}>× {g.pr.reps}</div>
+                        {oneRM !== g.pr.kg && <div style={{ fontSize: 9, color: C.purple, marginTop: 2 }}>~{oneRM} 1RM</div>}
                       </div>
                     )
                   })}
