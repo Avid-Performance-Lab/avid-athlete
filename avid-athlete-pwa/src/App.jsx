@@ -665,6 +665,14 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
               </div>
             </div>
 
+            {prescEx?.consignes && (
+              <div style={{ padding: '8px 14px', background: 'rgba(242,196,76,.08)', borderBottom: `1px solid ${C.border}`,
+                display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 12, flexShrink: 0, marginTop: 1 }}>💡</span>
+                <div style={{ fontSize: 12, color: C.text, lineHeight: 1.4, fontStyle: 'italic' }}>{prescEx.consignes}</div>
+              </div>
+            )}
+
             <div style={{ padding: '10px 14px' }}>
               {isCardio(exDisp.cat) ? (
                 /* ── CARDIO ── */
