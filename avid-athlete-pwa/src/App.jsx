@@ -1887,11 +1887,24 @@ function PersonalRecords({ athlete, cahiers }) {
 function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
   if (!athlete) return null
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ prenom: athlete.prenom || '', nom: athlete.nom || '', objectif: athlete.objectif || '', sport: athlete.sport || '', taille: athlete.taille || '', poids: athlete.poids || '', sexe: athlete.sexe || '' })
+  const [form, setForm] = useState({ prenom: athlete.prenom || '', nom: athlete.nom || '', objectif: athlete.objectif || '', sport: athlete.sport || '', taille: athlete.taille || '', poids: athlete.poids || '', age: athlete.age || '', sexe: athlete.sexe || '' })
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   async function handleSaveProfil() {
     const updated = { ...athlete, ...form }
+    // Historique du poids : on ajoute une entrée si le poids a changé
+    const newPoids = parseFloat(form.poids)
+    if (!isNaN(newPoids) && newPoids > 0) {
+      const history = Array.isArray(athlete.poidsHistory) ? [...athlete.poidsHistory] : []
+      const today = new Date().toISOString().slice(0, 10)
+      const lastEntry = history[history.length - 1]
+      if (!lastEntry || lastEntry.date !== today) {
+        history.push({ date: today, poids: newPoids })
+      } else {
+        lastEntry.poids = newPoids
+      }
+      updated.poidsHistory = history
+    }
     await saveAthlete(updated)
     notify('✓ Profil mis à jour', '#27AE60')
     setEditing(false)
@@ -1920,12 +1933,10 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
           </div>
           {athlete.sport && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{athlete.sport}</div>}
         </div>
-        {isSolo && (
-          <button onClick={() => setEditing(e => !e)}
-            style={{ marginLeft: 'auto', background: editing ? C.border : 'rgba(242,196,76,.1)', border: '1px solid rgba(242,196,76,.3)', borderRadius: 6, color: '#F2C94C', fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: '6px 12px', cursor: 'pointer', flexShrink: 0 }}>
-            {editing ? '✕ Annuler' : '✏ Modifier'}
-          </button>
-        )}
+        <button onClick={() => setEditing(e => !e)}
+          style={{ marginLeft: 'auto', background: editing ? C.border : 'rgba(242,196,76,.1)', border: '1px solid rgba(242,196,76,.3)', borderRadius: 6, color: '#F2C94C', fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: '6px 12px', cursor: 'pointer', flexShrink: 0 }}>
+          {editing ? '✕ Annuler' : '✏ Modifier'}
+        </button>
       </div>
 
       {/* Formulaire édition solo */}
@@ -1944,7 +1955,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
                 style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
             </div>
           ))}
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4, marginBottom: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>TAILLE (cm)</div>
               <input type="number" value={form.taille} onChange={e => setF('taille', e.target.value)}
@@ -1956,6 +1967,22 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
                 style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
             </div>
           </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>ÂGE</div>
+              <input type="number" value={form.age} onChange={e => setF('age', e.target.value)}
+                style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>SEXE</div>
+              <select value={form.sexe} onChange={e => setF('sexe', e.target.value)}
+                style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}>
+                <option value="">—</option>
+                <option value="H">H</option>
+                <option value="F">F</option>
+              </select>
+            </div>
+          </div>
           <button onClick={handleSaveProfil}
             style={{ width: '100%', marginTop: 14, background: '#F2C94C', color: '#1a1000', border: 'none', borderRadius: 8, padding: '13px', fontSize: 13, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer' }}>
             Sauvegarder →
@@ -1964,10 +1991,11 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
       )}
 
       {/* Stats grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
         {[
           { l: 'TAILLE', v: athlete.taille ? `${athlete.taille} cm` : '—' },
           { l: 'POIDS',  v: athlete.poids  ? `${athlete.poids} kg`  : '—' },
+          { l: 'ÂGE',    v: athlete.age ? `${athlete.age} ans` : '—' },
           { l: 'SEXE',   v: athlete.sexe || '—' },
           { l: 'BLOCS',  v: athlete.blocs?.length || 0 },
         ].map(({ l, v }) => (
@@ -2095,6 +2123,40 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
                 </div>
               </>
             )}
+
+            {/* Courbe évolution du poids */}
+            {Array.isArray(athlete.poidsHistory) && athlete.poidsHistory.length > 1 && (() => {
+              const hist = [...athlete.poidsHistory].sort((a,b) => a.date.localeCompare(b.date))
+              const vals = hist.map(h => h.poids)
+              const minP = Math.min(...vals) - 1, maxP = Math.max(...vals) + 1
+              const n = hist.length
+              const W = 280, H = 70, PL = 4, PR = 4, PT = 14, PB = 16
+              const gW = W - PL - PR, gH = H
+              const px = i => PL + (n <= 1 ? gW/2 : (i/(n-1))*gW)
+              const py = v => PT + gH - ((v - minP)/(maxP - minP || 1))*gH
+              const pts = hist.map((h,i) => ({ x: px(i), y: py(h.poids), v: h.poids, date: h.date }))
+              const pathD = pts.map((p,i) => `${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+              const first = vals[0], last = vals[vals.length-1]
+              const diff = Math.round((last - first) * 10) / 10
+              return (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>ÉVOLUTION DU POIDS</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: diff > 0 ? C.orange : diff < 0 ? C.green : C.muted }}>
+                      {diff > 0 ? '+' : ''}{diff} kg
+                    </div>
+                  </div>
+                  <svg viewBox={`0 0 ${W} ${H+PT+PB}`} width="100%" height={H+PT+PB} style={{ display: 'block' }}>
+                    <path d={pathD} fill="none" stroke={C.blue} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                    {pts.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r={i===0||i===n-1?3.5:2} fill={C.blue} />)}
+                    <text x={pts[0].x} y={pts[0].y-8} textAnchor="start" fontSize="10" fill={C.blue} fontWeight="800">{first} kg</text>
+                    <text x={pts[n-1].x} y={pts[n-1].y-8} textAnchor="end" fontSize="10" fill={C.blue} fontWeight="800">{last} kg</text>
+                    <text x={pts[0].x} y={H+PT+12} textAnchor="start" fontSize="8" fill={C.muted}>{hist[0].date.slice(5)}</text>
+                    <text x={pts[n-1].x} y={H+PT+12} textAnchor="end" fontSize="8" fill={C.muted}>{hist[n-1].date.slice(5)}</text>
+                  </svg>
+                </div>
+              )
+            })()}
           </div>
         )
       })()}
