@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { db } from './firebase.js'
-import { doc, onSnapshot, collection, query, where, setDoc } from 'firebase/firestore'
+import { db, app } from './firebase.js'
+import { doc, onSnapshot, collection, query, where, setDoc, updateDoc } from 'firebase/firestore'
+import {
+  getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, sendPasswordResetEmail,
+  setPersistence, browserLocalPersistence,
+} from 'firebase/auth'
+
+const auth = getAuth(app)
+setPersistence(auth, browserLocalPersistence).catch(() => {})
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 
@@ -100,11 +108,25 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [isSolo, setIsSolo] = useState(false)
   const [soloSetup, setSoloSetup] = useState(false) // true = affiche l'écran de création
+  const [signupAthleteId, setSignupAthleteId] = useState(null) // ⚡ non-null = affiche l'écran d'inscription
+  const [authUser, setAuthUser] = useState(undefined) // undefined = résolution en cours, null = non connecté
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => setAuthUser(u))
+    return unsub
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const idFromUrl = params.get('id')
     const isSoloUrl = window.location.pathname.includes('/solo') || params.get('mode') === 'solo'
+
+    // ⚡ Mode inscription — PRIORITAIRE sur tout, ne charge aucune fiche pour l'instant
+    if (params.get('mode') === 'signup' && params.get('athleteId')) {
+      setSignupAthleteId(params.get('athleteId'))
+      setLoading(false)
+      return
+    }
 
     // ⚡ Mode solo — PRIORITAIRE sur tout le reste
     if (isSoloUrl) {
@@ -229,6 +251,14 @@ export default function App() {
     } catch(e) { notify('⚠ Erreur création profil', C.red) }
   }
 
+  if (signupAthleteId) return (
+    <SignupScreen
+      athleteId={signupAthleteId}
+      onDone={() => {
+        window.location.href = window.location.origin + window.location.pathname + '?id=' + signupAthleteId
+      }}
+    />
+  )
   if (loading) return <LoadingScreen />
   if (soloSetup) return <SoloSetupScreen onCreate={createSoloProfil} />
   if (error === 'no_id') return <ErrorScreen msg="Lien invalide" sub="Demande un nouveau lien à ton coach." />
@@ -2186,6 +2216,110 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
 // ── Loading & Error ───────────────────────────────────────────────────────────
 
 // ── Solo Setup Screen ─────────────────────────────────────────────────────────
+function SignupScreen({ athleteId, onDone }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState(null)
+  const [resetSent, setResetSent] = useState(false)
+
+  const inputStyle = {
+    width: '100%', background: '#111', border: '1px solid #333',
+    borderRadius: 8, padding: '13px 14px', color: '#fff',
+    fontSize: 15, fontWeight: 600, outline: 'none',
+    fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif",
+    boxSizing: 'border-box',
+  }
+  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 6, display: 'block' }
+
+  function mapError(code) {
+    const messages = {
+      'auth/invalid-email': 'Email invalide.',
+      'auth/email-already-in-use': 'Un compte existe déjà avec cet email.',
+      'auth/weak-password': 'Mot de passe trop court (6 caractères minimum).',
+    }
+    return messages[code] || 'Une erreur est survenue, réessaie.'
+  }
+
+  async function handleCreate() {
+    if (!email.trim() || password.length < 6) return
+    setSaving(true)
+    setErrorMsg(null)
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password)
+      await updateDoc(doc(db, 'athletes', athleteId), { uid: cred.user.uid })
+      onDone()
+    } catch (e) {
+      setErrorMsg(mapError(e.code))
+      setSaving(false)
+    }
+  }
+
+  async function handleResetPassword() {
+    if (!email.trim()) { setErrorMsg('Entre ton email pour recevoir le lien.'); return }
+    try {
+      await sendPasswordResetEmail(auth, email.trim())
+      setResetSent(true)
+    } catch (e) {
+      setErrorMsg(mapError(e.code))
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: '#141414', borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 28, width: 'auto' }} />
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2 }}>AVID PERFORMANCE LAB</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#F2C94C', letterSpacing: 1 }}>ACTIVATION DE TON COMPTE</div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, padding: '32px 20px', maxWidth: 420, margin: '0 auto', width: '100%' }} className="fade-in">
+        <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+          Crée ton accès
+        </div>
+        <div style={{ fontSize: 13, color: '#888', marginBottom: 32, lineHeight: 1.6 }}>
+          Choisis un email et un mot de passe. Ton programme, tes séances et ton historique
+          seront directement disponibles, rien n'est perdu.
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>EMAIL</label>
+          <input style={inputStyle} type="email" placeholder="ton@email.com" value={email}
+            onChange={e => setEmail(e.target.value)} />
+        </div>
+
+        <div style={{ marginBottom: 8 }}>
+          <label style={labelStyle}>MOT DE PASSE</label>
+          <input style={inputStyle} type="password" placeholder="6 caractères minimum" value={password}
+            onChange={e => setPassword(e.target.value)} />
+        </div>
+
+        {errorMsg && <div style={{ color: '#EA4335', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
+        {resetSent && <div style={{ color: '#27AE60', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
+
+        <button onClick={handleCreate} disabled={saving}
+          style={{
+            width: '100%', marginTop: 20, padding: '14px', borderRadius: 8, border: 'none',
+            background: '#F2C94C', color: '#1a1000', fontWeight: 800, fontSize: 15,
+            letterSpacing: 1, textTransform: 'uppercase', cursor: saving ? 'default' : 'pointer',
+            opacity: saving ? 0.6 : 1,
+          }}>
+          {saving ? 'Création...' : 'Créer mon compte'}
+        </button>
+
+        <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#555' }}>
+          Déjà un compte ?{' '}
+          <span onClick={handleResetPassword} style={{ color: '#888', textDecoration: 'underline', cursor: 'pointer' }}>
+            Mot de passe oublié
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SoloSetupScreen({ onCreate }) {
   const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '' })
   const [step, setStep] = useState(1)
