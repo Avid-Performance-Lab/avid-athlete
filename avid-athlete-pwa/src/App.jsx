@@ -156,12 +156,17 @@ export default function App() {
     if (authUser === undefined) return // attend que Firebase confirme l'état de connexion avant de lire
     const colName = athleteId.startsWith('solo_') ? 'athletes_solo' : 'athletes'
     const unsub = onSnapshot(doc(db, colName, athleteId), (snap) => {
-      if (snap.exists()) { setAthlete({ id: snap.id, ...snap.data() }); setOnline(true) }
+      if (snap.exists()) { setAthlete({ id: snap.id, ...snap.data() }); setOnline(true); setError(null) }
       else setError('not_found')
       setLoading(false)
-    }, () => { setOnline(false); setLoading(false); setError('offline') })
+    }, (err) => {
+      setLoading(false)
+      if (err.code === 'permission-denied') { setError('needs_login') }
+      else { setOnline(false); setError('offline') }
+    })
     return unsub
   }, [athleteId, authUser])
+
 
   useEffect(() => {
     if (!athleteId) return
@@ -266,6 +271,7 @@ export default function App() {
   if (soloSetup) return <SoloSetupScreen onCreate={createSoloProfil} />
   if (error === 'no_id') return <ErrorScreen msg="Lien invalide" sub="Demande un nouveau lien à ton coach." />
   if (error === 'not_found') return <ErrorScreen msg="Athlète introuvable" sub="Ce lien ne correspond à aucun profil." />
+  if (error === 'needs_login') return <LoginScreen athleteId={athleteId} />
   if (error === 'offline') return <ErrorScreen msg="Hors ligne" sub="Vérifie ta connexion et réessaie." />
 
   const TABS = [
@@ -2219,6 +2225,112 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
 // ── Loading & Error ───────────────────────────────────────────────────────────
 
 // ── Solo Setup Screen ─────────────────────────────────────────────────────────
+function LoginScreen({ athleteId }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState(null)
+  const [resetSent, setResetSent] = useState(false)
+
+  const inputStyle = {
+    width: '100%', background: '#111', border: '1px solid #333',
+    borderRadius: 8, padding: '13px 14px', color: '#fff',
+    fontSize: 15, fontWeight: 600, outline: 'none',
+    fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif",
+    boxSizing: 'border-box',
+  }
+  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 6, display: 'block' }
+
+  function mapError(code) {
+    const messages = {
+      'auth/invalid-email': 'Email invalide.',
+      'auth/invalid-credential': 'Email ou mot de passe incorrect.',
+      'auth/user-not-found': 'Aucun compte associé à cet email.',
+      'auth/wrong-password': 'Mot de passe incorrect.',
+      'auth/too-many-requests': 'Trop de tentatives, réessaie dans quelques minutes.',
+    }
+    return messages[code] || 'Une erreur est survenue, réessaie.'
+  }
+
+  async function handleLogin() {
+    if (!email.trim() || !password) return
+    setSaving(true)
+    setErrorMsg(null)
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password)
+      // La reconnexion déclenche onAuthStateChanged, qui relance automatiquement
+      // la lecture de la fiche — pas besoin de redirection manuelle ici.
+    } catch (e) {
+      setErrorMsg(mapError(e.code))
+      setSaving(false)
+    }
+  }
+
+  async function handleResetPassword() {
+    if (!email.trim()) { setErrorMsg('Entre ton email pour recevoir le lien.'); return }
+    try {
+      await sendPasswordResetEmail(auth, email.trim())
+      setResetSent(true)
+    } catch (e) {
+      setErrorMsg(mapError(e.code))
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: '#141414', borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 28, width: 'auto' }} />
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2 }}>AVID PERFORMANCE LAB</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#F2C94C', letterSpacing: 1 }}>RECONNEXION</div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, padding: '32px 20px', maxWidth: 420, margin: '0 auto', width: '100%' }} className="fade-in">
+        <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+          Reconnecte-toi
+        </div>
+        <div style={{ fontSize: 13, color: '#888', marginBottom: 32, lineHeight: 1.6 }}>
+          Ta session a expiré ou tu es sur un nouvel appareil. Entre ton email et ton
+          mot de passe pour retrouver ton programme et ton historique.
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>EMAIL</label>
+          <input style={inputStyle} type="email" placeholder="ton@email.com" value={email}
+            onChange={e => setEmail(e.target.value)} />
+        </div>
+
+        <div style={{ marginBottom: 8 }}>
+          <label style={labelStyle}>MOT DE PASSE</label>
+          <input style={inputStyle} type="password" placeholder="Ton mot de passe" value={password}
+            onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogin()} />
+        </div>
+
+        {errorMsg && <div style={{ color: '#EA4335', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
+        {resetSent && <div style={{ color: '#27AE60', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
+
+        <button onClick={handleLogin} disabled={saving}
+          style={{
+            width: '100%', marginTop: 20, padding: '14px', borderRadius: 8, border: 'none',
+            background: '#F2C94C', color: '#1a1000', fontWeight: 800, fontSize: 15,
+            letterSpacing: 1, textTransform: 'uppercase', cursor: saving ? 'default' : 'pointer',
+            opacity: saving ? 0.6 : 1,
+          }}>
+          {saving ? 'Connexion...' : 'Se connecter'}
+        </button>
+
+        <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#555' }}>
+          <span onClick={handleResetPassword} style={{ color: '#888', textDecoration: 'underline', cursor: 'pointer' }}>
+            Mot de passe oublié
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SignupScreen({ athleteId, onDone }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
