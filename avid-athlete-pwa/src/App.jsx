@@ -153,6 +153,7 @@ export default function App() {
 
   useEffect(() => {
     if (!athleteId) return
+    if (authUser === undefined) return // attend que Firebase confirme l'état de connexion avant de lire
     const colName = athleteId.startsWith('solo_') ? 'athletes_solo' : 'athletes'
     const unsub = onSnapshot(doc(db, colName, athleteId), (snap) => {
       if (snap.exists()) { setAthlete({ id: snap.id, ...snap.data() }); setOnline(true) }
@@ -160,10 +161,11 @@ export default function App() {
       setLoading(false)
     }, () => { setOnline(false); setLoading(false); setError('offline') })
     return unsub
-  }, [athleteId])
+  }, [athleteId, authUser])
 
   useEffect(() => {
     if (!athleteId) return
+    if (authUser === undefined) return
     const q = query(collection(db, 'cahiers'), where('athleteId', '==', athleteId))
     const unsub = onSnapshot(q, (snap) => {
       const data = {}
@@ -171,10 +173,11 @@ export default function App() {
       setCahiers(data)
     }, () => {})
     return unsub
-  }, [athleteId])
+  }, [athleteId, authUser])
 
   useEffect(() => {
     if (!athleteId) return
+    if (authUser === undefined) return
     const q = query(collection(db, 'nutrition'), where('athleteId', '==', athleteId))
     const unsub = onSnapshot(q, (snap) => {
       const data = {}
@@ -182,7 +185,7 @@ export default function App() {
       setNutri(data)
     }, () => {})
     return unsub
-  }, [athleteId])
+  }, [athleteId, authUser])
 
   function notify(msg, color = C.green) {
     setToast({ msg, color })
