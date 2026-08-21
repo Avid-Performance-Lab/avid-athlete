@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { db, app } from './firebase.js'
-import { doc, onSnapshot, collection, query, where, setDoc, updateDoc } from 'firebase/firestore'
+import { doc, onSnapshot, collection, query, where, setDoc, updateDoc, getDocs } from 'firebase/firestore'
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
   signInWithEmailAndPassword, sendPasswordResetEmail,
@@ -151,6 +151,37 @@ export default function App() {
     setError('no_id'); setLoading(false)
   }, [])
 
+  // ⚡ Récupération de compte : si l'athlète arrive sans lien (lien perdu, nouvel
+  // appareil sans localStorage) mais qu'il a un compte, on retrouve sa fiche
+  // automatiquement une fois qu'il se connecte — plus besoin du lien du tout.
+  useEffect(() => {
+    if (error !== 'no_id') return
+    if (authUser === undefined) return // encore en cours de résolution
+    if (!authUser) return // pas connecté : l'écran de connexion générique s'affichera
+    let cancelled = false
+    setLoading(true)
+    ;(async () => {
+      try {
+        const q = query(collection(db, 'athletes'), where('uid', '==', authUser.uid))
+        const snap = await getDocs(q)
+        if (cancelled) return
+        if (!snap.empty) {
+          const foundId = snap.docs[0].id
+          try { localStorage.setItem('avid_athlete_id', foundId) } catch(e) {}
+          setAthleteId(foundId)
+          setError(null)
+        } else {
+          setError('account_not_linked')
+        }
+      } catch (e) {
+        setError('account_not_linked')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [error, authUser])
+
   useEffect(() => {
     if (!athleteId) return
     if (authUser === undefined) return // attend que Firebase confirme l'état de connexion avant de lire
@@ -269,7 +300,12 @@ export default function App() {
   )
   if (loading) return <LoadingScreen />
   if (soloSetup) return <SoloSetupScreen onCreate={createSoloProfil} />
-  if (error === 'no_id') return <ErrorScreen msg="Lien invalide" sub="Demande un nouveau lien à ton coach." />
+  if (error === 'no_id') {
+    if (authUser === undefined) return <LoadingScreen />
+    if (authUser === null) return <LoginScreen athleteId={null} />
+    return <ErrorScreen msg="Lien invalide" sub="Demande un nouveau lien à ton coach." />
+  }
+  if (error === 'account_not_linked') return <ErrorScreen msg="Compte non lié" sub="Ce compte n'est associé à aucun profil athlète. Contacte ton coach." />
   if (error === 'not_found') return <ErrorScreen msg="Athlète introuvable" sub="Ce lien ne correspond à aucun profil." />
   if (error === 'needs_login') return <LoginScreen athleteId={athleteId} />
   if (error === 'offline') return <ErrorScreen msg="Hors ligne" sub="Vérifie ta connexion et réessaie." />
