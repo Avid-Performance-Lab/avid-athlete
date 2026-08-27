@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { db, app } from './firebase.js'
-import { doc, onSnapshot, collection, query, where, setDoc, updateDoc, getDocs } from 'firebase/firestore'
+import { doc, onSnapshot, collection, query, where, setDoc, updateDoc, getDocs, getDoc } from 'firebase/firestore'
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
   signInWithEmailAndPassword, sendPasswordResetEmail,
@@ -162,6 +162,19 @@ export default function App() {
     setLoading(true)
     ;(async () => {
       try {
+        // Vérifie d'abord un profil solo (ID déterministe = solo_{uid}, lecture directe et rapide)
+        const soloRef = doc(db, 'athletes_solo', 'solo_' + authUser.uid)
+        const soloSnap = await getDoc(soloRef)
+        if (cancelled) return
+        if (soloSnap.exists()) {
+          try { localStorage.setItem('avid_solo_id', soloSnap.id) } catch(e) {}
+          setIsSolo(true)
+          setAthleteId(soloSnap.id)
+          setError(null)
+          return
+        }
+
+        // Sinon, cherche un profil coaché lié à ce compte
         const q = query(collection(db, 'athletes'), where('uid', '==', authUser.uid))
         const snap = await getDocs(q)
         if (cancelled) return
@@ -259,9 +272,11 @@ export default function App() {
   }
 
   async function createSoloProfil(formData) {
-    const newId = 'solo_' + uid() + uid()
+    const cred = await createUserWithEmailAndPassword(auth, formData.email.trim(), formData.password)
+    const newId = 'solo_' + cred.user.uid
     const newAthlete = {
       id: newId,
+      uid: cred.user.uid,
       prenom: formData.prenom,
       nom: formData.nom,
       objectif: formData.objectif,
@@ -282,12 +297,10 @@ export default function App() {
         }]
       }]
     }
-    try {
-      await setDoc(doc(db, 'athletes_solo', newId), newAthlete)
-      try { localStorage.setItem('avid_solo_id', newId) } catch(e) {}
-      setSoloSetup(false)
-      setAthleteId(newId)
-    } catch(e) { notify('⚠ Erreur création profil', C.red) }
+    await setDoc(doc(db, 'athletes_solo', newId), newAthlete)
+    try { localStorage.setItem('avid_solo_id', newId) } catch(e) {}
+    setSoloSetup(false)
+    setAthleteId(newId)
   }
 
   if (signupAthleteId) return (
@@ -2472,16 +2485,23 @@ function SignupScreen({ athleteId, onDone }) {
 }
 
 function SoloSetupScreen({ onCreate }) {
-  const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '' })
+  const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '', email: '', password: '' })
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   async function handleCreate() {
-    if (!form.prenom.trim()) return
+    if (!form.email.trim() || form.password.length < 6) return
     setSaving(true)
-    await onCreate(form)
+    setErrorMsg(null)
+    try {
+      await onCreate(form)
+    } catch (e) {
+      setErrorMsg(e.message || 'Une erreur est survenue, réessaie.')
+      setSaving(false)
+    }
   }
 
   const inputStyle = {
@@ -2507,7 +2527,7 @@ function SoloSetupScreen({ onCreate }) {
       <div style={{ flex: 1, padding: '32px 20px', maxWidth: 480, margin: '0 auto', width: '100%' }}>
         {/* Progress */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 32 }}>
-          {[1,2].map(s => (
+          {[1,2,3].map(s => (
             <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s <= step ? '#F2C94C' : '#222' }} />
           ))}
         </div>
@@ -2598,6 +2618,45 @@ function SoloSetupScreen({ onCreate }) {
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setStep(1)}
+                style={{ flex: 1, background: 'none', border: '1px solid #333', borderRadius: 8,
+                  color: '#555', padding: '15px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                ← Retour
+              </button>
+              <button onClick={() => setStep(3)}
+                style={{ flex: 2, background: '#F2C94C', color: '#1a1000', border: 'none', borderRadius: 8,
+                  padding: '15px', fontSize: 14, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase',
+                  cursor: 'pointer' }}>
+                Suivant →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="fade-in">
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+              Crée ton accès
+            </div>
+            <div style={{ fontSize: 13, color: '#555', marginBottom: 32, lineHeight: 1.6 }}>
+              Un email et un mot de passe pour retrouver ton profil sur n'importe quel appareil.
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>EMAIL</label>
+              <input style={inputStyle} type="email" placeholder="ton@email.com" value={form.email}
+                onChange={e => set('email', e.target.value)} />
+            </div>
+
+            <div style={{ marginBottom: 8 }}>
+              <label style={labelStyle}>MOT DE PASSE</label>
+              <input style={inputStyle} type="password" placeholder="6 caractères minimum" value={form.password}
+                onChange={e => set('password', e.target.value)} />
+            </div>
+
+            {errorMsg && <div style={{ color: '#EA4335', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={() => setStep(2)}
                 style={{ flex: 1, background: 'none', border: '1px solid #333', borderRadius: 8,
                   color: '#555', padding: '15px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                 ← Retour
