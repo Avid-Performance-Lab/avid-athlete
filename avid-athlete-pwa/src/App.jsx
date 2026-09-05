@@ -2619,6 +2619,15 @@ function SoloSetupScreen({ onCreate }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  function mapSoloError(code) {
+    const messages = {
+      'auth/email-already-in-use': 'Un compte existe déjà avec cet email — connecte-toi plutôt depuis l\'écran de connexion.',
+      'auth/invalid-email': 'Email invalide.',
+      'auth/weak-password': 'Mot de passe trop court (6 caractères minimum).',
+    }
+    return messages[code] || 'Une erreur est survenue, réessaie.'
+  }
+
   async function handleCreate() {
     if (!form.email.trim() || form.password.length < 6) return
     setSaving(true)
@@ -2626,7 +2635,7 @@ function SoloSetupScreen({ onCreate }) {
     try {
       await onCreate(form)
     } catch (e) {
-      setErrorMsg(e.message || 'Une erreur est survenue, réessaie.')
+      setErrorMsg(mapSoloError(e.code))
       setSaving(false)
     }
   }
@@ -2780,7 +2789,16 @@ function SoloSetupScreen({ onCreate }) {
                 onChange={e => set('password', e.target.value)} />
             </div>
 
-            {errorMsg && <div style={{ color: '#E63946', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
+            {errorMsg && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ color: '#E63946', fontSize: 13 }}>{errorMsg}</div>
+                {errorMsg.includes('connecte-toi') && (
+                  <a href="https://avid-athlete.vercel.app" style={{ fontSize: 12, color: '#F2C94C', fontWeight: 700, textDecoration: 'underline' }}>
+                    → Aller à la connexion
+                  </a>
+                )}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button onClick={() => setStep(2)}
