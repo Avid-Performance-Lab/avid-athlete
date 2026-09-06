@@ -415,7 +415,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
   })
   const [openSea, setOpenSea] = useState(null)
   const [addExFor, setAddExFor] = useState(null)
-  const [exForm, setExForm] = useState({ nom: '', cat: 'JAMBES', nbSeries: 3, reps: 10, kg: 0 })
+  const [exForm, setExForm] = useState({ nom: '', cat: 'JAMBES', nbSeries: 3, reps: 10, kg: 0, rpe: '' })
 
   function ajouterBloc() {
     const label = window.prompt('Nom du nouveau bloc ?', `Bloc ${athlete.blocs.length + 1}`)
@@ -456,7 +456,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     const seaRef = updated.blocs[blocIdx].semaines[semIdx].seances[seaI]
     seaRef.exercices = seaRef.exercices || []
     seaRef.exercices.push({
-      id: uid(), nom: exForm.nom.trim(), cat: exForm.cat,
+      id: uid(), nom: exForm.nom.trim(), cat: exForm.cat, rpeCible: Number(exForm.rpe) || null,
       series: Array.from({ length: Number(exForm.nbSeries) || 1 }, () => ({
         reps: Number(exForm.reps) || 0, kg: Number(exForm.kg) || 0
       }))
@@ -464,7 +464,16 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     saveAthlete(updated)
     notify('✓ Exercice ajouté', C.green)
     setAddExFor(null)
-    setExForm({ nom: '', cat: 'JAMBES', nbSeries: 3, reps: 10, kg: 0 })
+    setExForm({ nom: '', cat: 'JAMBES', nbSeries: 3, reps: 10, kg: 0, rpe: '' })
+  }
+
+  function supprimerExercice(seaI, exId) {
+    if (!window.confirm('Supprimer cet exercice ?')) return
+    const updated = JSON.parse(JSON.stringify(athlete))
+    const seaRef = updated.blocs[blocIdx].semaines[semIdx].seances[seaI]
+    seaRef.exercices = (seaRef.exercices || []).filter(ex => ex.id !== exId)
+    saveAthlete(updated)
+    notify('✓ Exercice supprimé', C.green)
   }
 
   function dupliquerSemaine(blocI, semI) {
@@ -630,8 +639,16 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                   border: `1px solid ${C.border}`, borderTop: `3px solid ${cc.bg}`, cursor: 'pointer' }}>
                 <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, letterSpacing: 1, marginBottom: 6 }}>📋 PRESCRIT</div>
                 {sea.exercices?.slice(0, 3).map(ex => (
-                  <div key={ex.id} style={{ fontSize: 10, color: C.muted, overflow: 'hidden',
-                    textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ex.nom}</div>
+                  <div key={ex.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontSize: 10, color: C.muted, overflow: 'hidden',
+                      textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{ex.nom}</div>
+                    {athlete.autonomie && (
+                      <div onClick={e => { e.stopPropagation(); supprimerExercice(i, ex.id) }}
+                        style={{ fontSize: 11, color: C.red, cursor: 'pointer', fontWeight: 800, flexShrink: 0 }}>
+                        ✕
+                      </div>
+                    )}
+                  </div>
                 ))}
                 {(sea.exercices?.length || 0) > 3 && (
                   <div style={{ fontSize: 10, color: C.muted }}>+{sea.exercices.length - 3} autres</div>
@@ -670,38 +687,59 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
             {addExFor === i && (
               <div style={{ background: C.card, border: `1px dashed ${C.yellow}`, borderRadius: 10,
                 padding: 12, marginTop: 8 }}>
-                <input placeholder="Nom de l'exercice" value={exForm.nom}
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 4 }}>NOM DE L'EXERCICE</div>
+                <input placeholder="Ex: Développé couché" value={exForm.nom}
                   onChange={e => setExForm(f => ({ ...f, nom: e.target.value }))}
                   style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`,
                     borderRadius: 6, padding: '8px 10px', color: C.text, fontSize: 12,
-                    marginBottom: 8, boxSizing: 'border-box' }} />
-                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 6, marginBottom: 10 }}>
-                  <select value={exForm.cat} onChange={e => setExForm(f => ({ ...f, cat: e.target.value }))}
-                    style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
-                      padding: '7px 4px', color: C.text, fontSize: 10 }}>
-                    <option value="JAMBES">Jambes</option>
-                    <option value="POUSSEE">Poussée</option>
-                    <option value="TIRAGE">Tirage</option>
-                    <option value="FULL BODY">Full Body</option>
-                    <option value="CARDIO">Cardio</option>
-                    <option value="AUTRES">Autres</option>
-                  </select>
-                  <input type="number" placeholder="Séries" value={exForm.nbSeries}
-                    onChange={e => setExForm(f => ({ ...f, nbSeries: e.target.value }))}
-                    style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
-                      padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
-                  <input type="number" placeholder="Reps" value={exForm.reps}
-                    onChange={e => setExForm(f => ({ ...f, reps: e.target.value }))}
-                    style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
-                      padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
-                  <input type="number" placeholder="Kg cible" value={exForm.kg}
-                    onChange={e => setExForm(f => ({ ...f, kg: e.target.value }))}
-                    style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
-                      padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
+                    marginBottom: 10, boxSizing: 'border-box' }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr', gap: 6 }}>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>CATÉGORIE</div>
+                    <select value={exForm.cat} onChange={e => setExForm(f => ({ ...f, cat: e.target.value }))}
+                      style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
+                        padding: '7px 4px', color: C.text, fontSize: 10, boxSizing: 'border-box' }}>
+                      <option value="JAMBES">Jambes</option>
+                      <option value="POUSSEE">Poussée</option>
+                      <option value="TIRAGE">Tirage</option>
+                      <option value="FULL BODY">Full Body</option>
+                      <option value="CARDIO">Cardio</option>
+                      <option value="AUTRES">Autres</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>SÉRIES</div>
+                    <input type="number" value={exForm.nbSeries}
+                      onChange={e => setExForm(f => ({ ...f, nbSeries: e.target.value }))}
+                      style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
+                        padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>RÉPÉT.</div>
+                    <input type="number" value={exForm.reps}
+                      onChange={e => setExForm(f => ({ ...f, reps: e.target.value }))}
+                      style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
+                        padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>CHARGE (KG)</div>
+                    <input type="number" value={exForm.kg}
+                      onChange={e => setExForm(f => ({ ...f, kg: e.target.value }))}
+                      style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
+                        padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>RPE CIBLE</div>
+                    <input type="number" min="1" max="10" placeholder="/10" value={exForm.rpe}
+                      onChange={e => setExForm(f => ({ ...f, rpe: e.target.value }))}
+                      style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
+                        padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
+                  </div>
                 </div>
                 <button onClick={() => ajouterExercice(i)}
                   style={{ background: C.yellow, color: C.navy, border: 'none', borderRadius: 6,
-                    padding: '7px 16px', fontSize: 11, fontWeight: 800, letterSpacing: 1, cursor: 'pointer' }}>
+                    padding: '7px 16px', fontSize: 11, fontWeight: 800, letterSpacing: 1, cursor: 'pointer',
+                    marginTop: 10 }}>
                   Ajouter l'exercice
                 </button>
               </div>
@@ -2409,13 +2447,13 @@ function LoginScreen({ athleteId }) {
   const [resetSent, setResetSent] = useState(false)
 
   const inputStyle = {
-    width: '100%', background: '#111', border: '1px solid #333',
-    borderRadius: 8, padding: '13px 14px', color: '#fff',
-    fontSize: 15, fontWeight: 600, outline: 'none',
-    fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif",
+    width: '100%', background: '#F5F5F3', border: '1px solid #E8E8E4',
+    borderRadius: 7, padding: '12px 13px', color: '#1A1A1A',
+    fontSize: 14, fontWeight: 600, outline: 'none',
+    fontFamily: "'Barlow',sans-serif",
     boxSizing: 'border-box',
   }
-  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 6, display: 'block' }
+  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, marginBottom: 6, display: 'block', fontFamily: "'Barlow Condensed',sans-serif" }
 
   function mapError(code) {
     const messages = {
@@ -2453,25 +2491,22 @@ function LoginScreen({ athleteId }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ background: '#141414', borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 28, width: 'auto' }} />
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2 }}>AVID PERFORMANCE LAB</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#F2C94C', letterSpacing: 1 }}>RECONNEXION</div>
-        </div>
+    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+        <img src={LOGO} alt="AVID" style={{ height: 26, filter: 'brightness(1.3)' }} />
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#6A7A8E', letterSpacing: 3, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
       </div>
 
-      <div style={{ flex: 1, padding: '32px 20px', maxWidth: 420, margin: '0 auto', width: '100%' }} className="fade-in">
-        <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }} className="fade-in">
+        <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
           Reconnecte-toi
         </div>
-        <div style={{ fontSize: 13, color: '#888', marginBottom: 32, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
           Ta session a expiré ou tu es sur un nouvel appareil. Entre ton email et ton
           mot de passe pour retrouver ton programme et ton historique.
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 14 }}>
           <label style={labelStyle}>EMAIL</label>
           <input style={inputStyle} type="email" placeholder="ton@email.com" value={email}
             onChange={e => setEmail(e.target.value)} />
@@ -2485,19 +2520,22 @@ function LoginScreen({ athleteId }) {
         </div>
 
         {errorMsg && <div style={{ color: '#E63946', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
-        {resetSent && <div style={{ color: '#27AE60', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
+        {resetSent && <div style={{ color: '#1E8C45', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
 
         <button onClick={handleLogin} disabled={saving}
           style={{
-            width: '100%', marginTop: 20, padding: '14px', borderRadius: 8, border: 'none',
-            background: '#F2C94C', color: '#1a1000', fontWeight: 800, fontSize: 15,
-            letterSpacing: 1, textTransform: 'uppercase', cursor: saving ? 'default' : 'pointer',
-            opacity: saving ? 0.6 : 1,
-          }}>
+            width: '100%', marginTop: 20, padding: '14px', borderRadius: 7, border: 'none',
+            background: '#12151C', color: '#fff', fontWeight: 800, fontSize: 13,
+            letterSpacing: 2, textTransform: 'uppercase', cursor: saving ? 'default' : 'pointer',
+            opacity: saving ? 0.6 : 1, fontFamily: "'Barlow Condensed',sans-serif",
+            transition: 'background .2s',
+          }}
+          onMouseEnter={e => !saving && (e.currentTarget.style.background = '#E63946')}
+          onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
           {saving ? 'Connexion...' : 'Se connecter'}
         </button>
 
-        <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#555' }}>
+        <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#AAA' }}>
           <span onClick={handleResetPassword} style={{ color: '#888', textDecoration: 'underline', cursor: 'pointer' }}>
             Mot de passe oublié
           </span>
@@ -2515,13 +2553,13 @@ function SignupScreen({ athleteId, onDone }) {
   const [resetSent, setResetSent] = useState(false)
 
   const inputStyle = {
-    width: '100%', background: '#111', border: '1px solid #333',
-    borderRadius: 8, padding: '13px 14px', color: '#fff',
-    fontSize: 15, fontWeight: 600, outline: 'none',
-    fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif",
+    width: '100%', background: '#F5F5F3', border: '1px solid #E8E8E4',
+    borderRadius: 7, padding: '12px 13px', color: '#1A1A1A',
+    fontSize: 14, fontWeight: 600, outline: 'none',
+    fontFamily: "'Barlow',sans-serif",
     boxSizing: 'border-box',
   }
-  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 6, display: 'block' }
+  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, marginBottom: 6, display: 'block', fontFamily: "'Barlow Condensed',sans-serif" }
 
   function mapError(code) {
     const messages = {
@@ -2557,25 +2595,22 @@ function SignupScreen({ athleteId, onDone }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ background: '#141414', borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 28, width: 'auto' }} />
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2 }}>AVID PERFORMANCE LAB</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#F2C94C', letterSpacing: 1 }}>ACTIVATION DE TON COMPTE</div>
-        </div>
+    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+        <img src={LOGO} alt="AVID" style={{ height: 26, filter: 'brightness(1.3)' }} />
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#6A7A8E', letterSpacing: 3, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
       </div>
 
-      <div style={{ flex: 1, padding: '32px 20px', maxWidth: 420, margin: '0 auto', width: '100%' }} className="fade-in">
-        <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }} className="fade-in">
+        <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
           Crée ton accès
         </div>
-        <div style={{ fontSize: 13, color: '#888', marginBottom: 32, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
           Choisis un email et un mot de passe. Ton programme, tes séances et ton historique
           seront directement disponibles, rien n'est perdu.
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 14 }}>
           <label style={labelStyle}>EMAIL</label>
           <input style={inputStyle} type="email" placeholder="ton@email.com" value={email}
             onChange={e => setEmail(e.target.value)} />
@@ -2588,19 +2623,22 @@ function SignupScreen({ athleteId, onDone }) {
         </div>
 
         {errorMsg && <div style={{ color: '#E63946', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
-        {resetSent && <div style={{ color: '#27AE60', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
+        {resetSent && <div style={{ color: '#1E8C45', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
 
         <button onClick={handleCreate} disabled={saving}
           style={{
-            width: '100%', marginTop: 20, padding: '14px', borderRadius: 8, border: 'none',
-            background: '#F2C94C', color: '#1a1000', fontWeight: 800, fontSize: 15,
-            letterSpacing: 1, textTransform: 'uppercase', cursor: saving ? 'default' : 'pointer',
-            opacity: saving ? 0.6 : 1,
-          }}>
+            width: '100%', marginTop: 20, padding: '14px', borderRadius: 7, border: 'none',
+            background: '#12151C', color: '#fff', fontWeight: 800, fontSize: 13,
+            letterSpacing: 2, textTransform: 'uppercase', cursor: saving ? 'default' : 'pointer',
+            opacity: saving ? 0.6 : 1, fontFamily: "'Barlow Condensed',sans-serif",
+            transition: 'background .2s',
+          }}
+          onMouseEnter={e => !saving && (e.currentTarget.style.background = '#E63946')}
+          onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
           {saving ? 'Création...' : 'Créer mon compte'}
         </button>
 
-        <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#555' }}>
+        <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#AAA' }}>
           Déjà un compte ?{' '}
           <span onClick={handleResetPassword} style={{ color: '#888', textDecoration: 'underline', cursor: 'pointer' }}>
             Mot de passe oublié
@@ -2641,43 +2679,51 @@ function SoloSetupScreen({ onCreate }) {
   }
 
   const inputStyle = {
-    width: '100%', background: C.inset, border: '1px solid #333',
-    borderRadius: 8, padding: '13px 14px', color: '#fff',
-    fontSize: 15, fontWeight: 600, outline: 'none',
-    fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif",
+    width: '100%', background: '#F5F5F3', border: '1px solid #E8E8E4',
+    borderRadius: 7, padding: '12px 13px', color: '#1A1A1A',
+    fontSize: 14, fontWeight: 600, outline: 'none',
+    fontFamily: "'Barlow',sans-serif",
     boxSizing: 'border-box',
   }
-  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 6, display: 'block' }
+  const labelStyle = { fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, marginBottom: 6, display: 'block', fontFamily: "'Barlow Condensed',sans-serif" }
+  const btnPrimary = (enabled) => ({
+    width: '100%', background: enabled ? '#12151C' : '#E8E8E4',
+    color: enabled ? '#fff' : '#AAA', border: 'none', borderRadius: 7,
+    padding: '14px', fontSize: 13, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase',
+    cursor: enabled ? 'pointer' : 'not-allowed', transition: 'background .2s',
+    fontFamily: "'Barlow Condensed',sans-serif",
+  })
+  const btnSecondary = {
+    flex: 1, background: 'none', border: '1px solid #E8E8E4', borderRadius: 7,
+    color: '#888', padding: '14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+    fontFamily: "'Barlow Condensed',sans-serif",
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ background: C.panel, borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 28, width: 'auto' }} />
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 2 }}>AVID PERFORMANCE LAB</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#F2C94C', letterSpacing: 1 }}>MODE SOLO</div>
-        </div>
+    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+        <img src={LOGO} alt="AVID" style={{ height: 26, filter: 'brightness(1.3)' }} />
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#6A7A8E', letterSpacing: 3, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
       </div>
 
-      <div style={{ flex: 1, padding: '32px 20px', maxWidth: 480, margin: '0 auto', width: '100%' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }}>
         {/* Progress */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 32 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 28 }}>
           {[1,2,3].map(s => (
-            <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s <= step ? '#F2C94C' : '#222' }} />
+            <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s <= step ? '#E63946' : '#E8E8E4' }} />
           ))}
         </div>
 
         {step === 1 && (
           <div className="fade-in">
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
               Crée ton profil
             </div>
-            <div style={{ fontSize: 13, color: '#555', marginBottom: 32, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
               Ces infos sont stockées dans ton app. Personne d'autre n'y a accès.
             </div>
 
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
                 <label style={labelStyle}>PRÉNOM *</label>
                 <input style={inputStyle} placeholder="Ton prénom" value={form.prenom}
@@ -2690,13 +2736,13 @@ function SoloSetupScreen({ onCreate }) {
               </div>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>OBJECTIF PRINCIPAL</label>
               <input style={inputStyle} placeholder="Ex: Prise de masse, force, endurance..." value={form.objectif}
                 onChange={e => set('objectif', e.target.value)} />
             </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 20 }}>
               <label style={labelStyle}>SPORT / DISCIPLINE</label>
               <input style={inputStyle} placeholder="Ex: Musculation, CrossFit, Course..." value={form.sport}
                 onChange={e => set('sport', e.target.value)} />
@@ -2705,10 +2751,9 @@ function SoloSetupScreen({ onCreate }) {
             <button
               onClick={() => form.prenom.trim() && setStep(2)}
               disabled={!form.prenom.trim()}
-              style={{ width: '100%', marginTop: 8, background: form.prenom.trim() ? '#F2C94C' : '#222',
-                color: form.prenom.trim() ? '#1a1000' : '#444', border: 'none', borderRadius: 8,
-                padding: '15px', fontSize: 14, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase',
-                cursor: form.prenom.trim() ? 'pointer' : 'not-allowed', transition: 'all .2s' }}>
+              style={btnPrimary(!!form.prenom.trim())}
+              onMouseEnter={e => form.prenom.trim() && (e.currentTarget.style.background = '#E63946')}
+              onMouseLeave={e => form.prenom.trim() && (e.currentTarget.style.background = '#12151C')}>
               Suivant →
             </button>
           </div>
@@ -2716,14 +2761,14 @@ function SoloSetupScreen({ onCreate }) {
 
         {step === 2 && (
           <div className="fade-in">
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
               Infos physiques
             </div>
-            <div style={{ fontSize: 13, color: '#555', marginBottom: 32, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
               Optionnel — utile pour le suivi de ta progression.
             </div>
 
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
                 <label style={labelStyle}>TAILLE (cm)</label>
                 <input style={inputStyle} type="number" placeholder="178" value={form.taille}
@@ -2736,16 +2781,17 @@ function SoloSetupScreen({ onCreate }) {
               </div>
             </div>
 
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 22 }}>
               <label style={labelStyle}>SEXE</label>
               <div style={{ display: 'flex', gap: 10 }}>
                 {['Homme', 'Femme', 'Autre'].map(s => (
                   <button key={s} onClick={() => set('sexe', s)}
-                    style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: '1px solid',
-                      borderColor: form.sexe === s ? '#F2C94C' : '#333',
-                      background: form.sexe === s ? 'rgba(242,196,76,.1)' : '#1a1a1a',
-                      color: form.sexe === s ? '#F2C94C' : '#555',
-                      fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all .2s' }}>
+                    style={{ flex: 1, padding: '11px 0', borderRadius: 7, border: '1px solid',
+                      borderColor: form.sexe === s ? '#E63946' : '#E8E8E4',
+                      background: form.sexe === s ? 'rgba(230,57,70,.08)' : '#F5F5F3',
+                      color: form.sexe === s ? '#E63946' : '#888',
+                      fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all .2s',
+                      fontFamily: "'Barlow',sans-serif" }}>
                     {s}
                   </button>
                 ))}
@@ -2753,15 +2799,10 @@ function SoloSetupScreen({ onCreate }) {
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setStep(1)}
-                style={{ flex: 1, background: 'none', border: '1px solid #333', borderRadius: 8,
-                  color: '#555', padding: '15px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                ← Retour
-              </button>
-              <button onClick={() => setStep(3)}
-                style={{ flex: 2, background: '#F2C94C', color: '#1a1000', border: 'none', borderRadius: 8,
-                  padding: '15px', fontSize: 14, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase',
-                  cursor: 'pointer' }}>
+              <button onClick={() => setStep(1)} style={btnSecondary}>← Retour</button>
+              <button onClick={() => setStep(3)} style={{ ...btnPrimary(true), flex: 2 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#E63946'}
+                onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
                 Suivant →
               </button>
             </div>
@@ -2770,14 +2811,14 @@ function SoloSetupScreen({ onCreate }) {
 
         {step === 3 && (
           <div className="fade-in">
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
               Crée ton accès
             </div>
-            <div style={{ fontSize: 13, color: '#555', marginBottom: 32, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
               Un email et un mot de passe pour retrouver ton profil sur n'importe quel appareil.
             </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>EMAIL</label>
               <input style={inputStyle} type="email" placeholder="ton@email.com" value={form.email}
                 onChange={e => set('email', e.target.value)} />
@@ -2793,7 +2834,7 @@ function SoloSetupScreen({ onCreate }) {
               <div style={{ marginTop: 10 }}>
                 <div style={{ color: '#E63946', fontSize: 13 }}>{errorMsg}</div>
                 {errorMsg.includes('connecte-toi') && (
-                  <a href="https://avid-athlete.vercel.app" style={{ fontSize: 12, color: '#F2C94C', fontWeight: 700, textDecoration: 'underline' }}>
+                  <a href="https://avid-athlete.vercel.app" style={{ fontSize: 12, color: '#E63946', fontWeight: 700, textDecoration: 'underline' }}>
                     → Aller à la connexion
                   </a>
                 )}
@@ -2801,15 +2842,10 @@ function SoloSetupScreen({ onCreate }) {
             )}
 
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button onClick={() => setStep(2)}
-                style={{ flex: 1, background: 'none', border: '1px solid #333', borderRadius: 8,
-                  color: '#555', padding: '15px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                ← Retour
-              </button>
-              <button onClick={handleCreate} disabled={saving}
-                style={{ flex: 2, background: '#F2C94C', color: '#1a1000', border: 'none', borderRadius: 8,
-                  padding: '15px', fontSize: 14, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase',
-                  cursor: 'pointer', opacity: saving ? .6 : 1 }}>
+              <button onClick={() => setStep(2)} style={btnSecondary}>← Retour</button>
+              <button onClick={handleCreate} disabled={saving} style={{ ...btnPrimary(true), flex: 2, opacity: saving ? .6 : 1 }}
+                onMouseEnter={e => !saving && (e.currentTarget.style.background = '#E63946')}
+                onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
                 {saving ? 'Création...' : 'Commencer →'}
               </button>
             </div>
