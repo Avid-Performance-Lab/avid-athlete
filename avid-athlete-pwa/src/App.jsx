@@ -16,9 +16,9 @@ const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAe4AAADKCAYAAABjXaPC
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const DARK = {
-  bg: '#141920', panel: '#141414', card: '#1C1C1C', border: '#262626',
+  bg: '#0A0A0A', panel: '#141414', card: '#1C1C1C', border: '#262626',
   inset: '#111111',
-  red: '#E63946', yellow: '#F2C94C', green: '#27AE60', blue: '#2F80ED',
+  red: '#EA4335', yellow: '#F2C94C', green: '#27AE60', blue: '#2F80ED',
   purple: '#9B51E0', navy: '#00194C', orange: '#F2994A',
   text: '#E8E8E8', muted: '#888', white: '#FFF',
 }
@@ -539,13 +539,19 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     const sea = sem?.seances?.[openSea.idx]
     if (!sea) { setOpenSea(null); return null }
     const key = `${athlete.id}-${bloc.id}-${sem.id}-${openSea.idx}`
-    const readOnly = openSea.mode === 'prescrit'
+    const isPrescritEdit = openSea.mode === 'prescrit' && !!athlete.autonomie
+    const readOnly = openSea.mode === 'prescrit' && !athlete.autonomie
     return (
       <SeanceDetail
-        seance={sea} readOnly={readOnly}
-        cahierData={readOnly ? null : cahiers[key]?.data}
+        seance={sea} readOnly={readOnly} isPrescritEdit={isPrescritEdit}
+        cahierData={openSea.mode === 'cahier' ? cahiers[key]?.data : null}
         onBack={() => setOpenSea(null)} notify={notify}
         onSaveCahier={async (data) => { await saveCahier(key, data) }}
+        onSavePrescrit={(newExercices) => {
+          const updated = JSON.parse(JSON.stringify(athlete))
+          updated.blocs[blocIdx].semaines[semIdx].seances[openSea.idx].exercices = newExercices
+          saveAthlete(updated)
+        }}
       />
     )
   }
@@ -760,9 +766,21 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 }
 
 // ── Séance Detail ─────────────────────────────────────────────────────────────
-function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahier, notify }) {
+function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false, cahierData, onSaveCahier, onSavePrescrit, notify }) {
   const [local, setLocal] = useState(() => {
     if (readOnly) return null
+    if (isPrescritEdit) {
+      // Édition directe du contenu prescrit (solo/autonomie) : on part des vraies
+      // valeurs cibles déjà définies, pas d'un cahier de résultats à part.
+      return (seance.exercices || []).map(ex => ({
+        nom: ex.nom, cat: ex.cat,
+        series: (ex.series && ex.series.length ? ex.series : [{ reps: '', kg: '' }]).map(s => ({
+          reps: s.reps ?? '', kg: s.kg ?? ''
+        })),
+        intensite: ex.rpeCible != null ? String(ex.rpeCible) : '',
+        remarques: '',
+      }))
+    }
     const base = (seance.exercices||[]).map((ex, ei) => {
       const existing = cahierData?.[ei]
       return {
@@ -787,7 +805,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 
   // Resync quand cahierData arrive depuis Firebase (async)
   useEffect(() => {
-    if (readOnly || !cahierData) return
+    if (readOnly || isPrescritEdit || !cahierData) return
     if (cahierDataRef.current === cahierData) return
     cahierDataRef.current = cahierData
     const base = (seance.exercices||[]).map((ex, ei) => {
@@ -810,6 +828,17 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
 
   async function handleSave() {
     setSaving(true)
+    if (isPrescritEdit) {
+      const newExercices = local.map(x => ({
+        id: uid(), nom: x.nom || 'Exercice', cat: x.cat || 'FULL BODY',
+        rpeCible: x.intensite ? Number(x.intensite) : null,
+        series: (x.series || []).map(s => ({ reps: Number(s.reps) || 0, kg: Number(s.kg) || 0 })),
+      }))
+      onSavePrescrit(newExercices)
+      setSaving(false)
+      notify('✓ Programme mis à jour !', C.green)
+      return
+    }
     await onSaveCahier(local)
     setSaving(false)
     notify('✓ Séance sauvegardée !', C.green)
@@ -896,7 +925,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
               display: 'flex', alignItems: 'center', gap: 10, background: C.inset }}>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 9, fontWeight: 800,
                 padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{exDisp.cat}</div>
-              {(!readOnly && isAdded) ? (
+              {(!readOnly && (isAdded || isPrescritEdit)) ? (
                 <input value={local?.[ei]?.nom || ''}
                   onChange={e => updateExoNom(ei, e.target.value)}
                   placeholder="Nom de l'exercice"
@@ -907,7 +936,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                   {readOnly ? exLocal.nom : (prescEx?.nom || exDisp.nom)}
                 </div>
               )}
-              {isAdded && !readOnly && (
+              {(isAdded || isPrescritEdit) && !readOnly && (
                 <button onClick={() => removeExoFromSeance(ei)}
                   style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>×</button>
               )}
@@ -1039,6 +1068,14 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                   <div style={{ textAlign: 'center', color: C.yellow }}>KG</div>
                   <div/>
                 </div>
+              ) : isPrescritEdit ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 24px', gap: 5,
+                  marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
+                  <div>#</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>RÉPÉTITIONS</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>CHARGE (KG)</div>
+                  <div/>
+                </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 1fr 1fr', gap: 5,
                   marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
@@ -1059,7 +1096,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                 const isExtra = !readOnly && !isAdded && si >= (prescEx?.series?.length || 0)
                 return (
                   <div key={si} style={{ display: 'grid',
-                    gridTemplateColumns: readOnly ? '28px 1fr 1fr' : '22px 1fr 1fr 1fr 1fr 24px',
+                    gridTemplateColumns: readOnly ? '28px 1fr 1fr' : isPrescritEdit ? '22px 1fr 1fr 24px' : '22px 1fr 1fr 1fr 1fr 24px',
                     gap: readOnly ? 6 : 4, marginBottom: 6, alignItems: 'center' }}>
                     <div style={{ fontSize: 11, color: isExtra ? C.orange : C.muted,
                       fontWeight: 700, textAlign: 'center' }}>{si + 1}{isExtra ? '+' : ''}</div>
@@ -1072,6 +1109,32 @@ function SeanceDetail({ seance, onBack, readOnly = false, cahierData, onSaveCahi
                           color: parseFloat(kg) > 0 ? C.yellow : C.muted, textAlign: 'center' }}>
                           {parseFloat(kg) > 0 ? `${kg}kg` : '—'}
                         </div>
+                      </>
+                    ) : isPrescritEdit ? (
+                      <>
+                        <input type="number" inputMode="decimal"
+                          value={local?.[ei]?.series?.[si]?.reps ?? ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+                            ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, reps: e.target.value })
+                          }))}
+                          placeholder="reps"
+                          style={{ background: C.inset, border: `1px solid ${C.green}`,
+                            borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
+                            color: C.green, textAlign: 'center', width: '100%', outline: 'none' }}
+                        />
+                        <input type="number" inputMode="decimal"
+                          value={local?.[ei]?.series?.[si]?.kg ?? ''}
+                          onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : {
+                            ...x, series: x.series.map((s, si2) => si2 !== si ? s : { ...s, kg: e.target.value })
+                          }))}
+                          placeholder="kg"
+                          style={{ background: C.inset, border: `1px solid ${C.yellow}`,
+                            borderRadius: 4, padding: '6px 3px', fontSize: 12, fontWeight: 700,
+                            color: C.yellow, textAlign: 'center', width: '100%', outline: 'none' }}
+                        />
+                        <button onClick={() => removeSerieFromExo(ei, si)}
+                          style={{ background: 'none', border: 'none', color: C.muted, fontSize: 16,
+                            cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
                       </>
                     ) : (
                       <>
