@@ -2491,12 +2491,12 @@ function LoginScreen({ athleteId }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
-        <img src={LOGO} alt="AVID" style={{ height: 26, filter: 'brightness(1.3)' }} />
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#6A7A8E', letterSpacing: 3, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
+    <div style={{ minHeight: '100vh', background: '#0A0A0A', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 24, width: 'auto' }} />
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
       </div>
-
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }} className="fade-in">
         <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
           Reconnecte-toi
@@ -2540,6 +2540,7 @@ function LoginScreen({ athleteId }) {
             Mot de passe oublié
           </span>
         </div>
+      </div>
       </div>
     </div>
   )
@@ -2595,12 +2596,12 @@ function SignupScreen({ athleteId, onDone }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
-        <img src={LOGO} alt="AVID" style={{ height: 26, filter: 'brightness(1.3)' }} />
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#6A7A8E', letterSpacing: 3, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
+    <div style={{ minHeight: '100vh', background: '#0A0A0A', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 24, width: 'auto' }} />
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
       </div>
-
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }} className="fade-in">
         <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
           Crée ton accès
@@ -2644,6 +2645,7 @@ function SignupScreen({ athleteId, onDone }) {
             Mot de passe oublié
           </span>
         </div>
+      </div>
       </div>
     </div>
   )
@@ -2700,12 +2702,12 @@ function SoloSetupScreen({ onCreate }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#141920', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-        <img src={LOGO} alt="AVID" style={{ height: 26, filter: 'brightness(1.3)' }} />
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#6A7A8E', letterSpacing: 3, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
+    <div style={{ minHeight: '100vh', background: '#0A0A0A', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 24, width: 'auto' }} />
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
       </div>
-
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }}>
         {/* Progress */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 28 }}>
@@ -2851,6 +2853,7 @@ function SoloSetupScreen({ onCreate }) {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   )
