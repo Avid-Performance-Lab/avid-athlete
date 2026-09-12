@@ -163,36 +163,41 @@ export default function App() {
     let cancelled = false
     setLoading(true)
     ;(async () => {
-      try {
-        // Vérifie d'abord un profil solo (ID déterministe = solo_{uid}, lecture directe et rapide)
-        const soloRef = doc(db, 'athletes_solo', 'solo_' + authUser.uid)
-        const soloSnap = await getDoc(soloRef)
-        if (cancelled) return
-        if (soloSnap.exists()) {
-          try { localStorage.setItem('avid_solo_id', soloSnap.id) } catch(e) {}
-          setIsSolo(true)
-          setAthleteId(soloSnap.id)
-          setError(null)
-          return
-        }
+      let foundId = null
 
-        // Sinon, cherche un profil coaché lié à ce compte
-        const q = query(collection(db, 'athletes'), where('uid', '==', authUser.uid))
-        const snap = await getDocs(q)
-        if (cancelled) return
-        if (!snap.empty) {
-          const foundId = snap.docs[0].id
-          try { localStorage.setItem('avid_athlete_id', foundId) } catch(e) {}
-          setAthleteId(foundId)
-          setError(null)
-        } else {
-          setError('account_not_linked')
-        }
-      } catch (e) {
-        setError('account_not_linked')
-      } finally {
-        if (!cancelled) setLoading(false)
+      // Tentative 1 : profil solo (ID déterministe = solo_{uid}).
+      // Isolée dans son propre try/catch : sur un compte coaché, ce document
+      // n'existe pas et la lecture peut être refusée par les règles (accès à
+      // un document inexistant) — ce n'est pas une vraie erreur, juste
+      // l'absence de profil solo, donc on continue vers la tentative 2.
+      try {
+        const soloSnap = await getDoc(doc(db, 'athletes_solo', 'solo_' + authUser.uid))
+        if (soloSnap.exists()) foundId = soloSnap.id
+      } catch (e) { /* pas de profil solo pour ce compte, on continue */ }
+
+      if (cancelled) return
+
+      // Tentative 2 : profil coaché lié à ce compte
+      if (!foundId) {
+        try {
+          const q = query(collection(db, 'athletes'), where('uid', '==', authUser.uid))
+          const snap = await getDocs(q)
+          if (!snap.empty) foundId = snap.docs[0].id
+        } catch (e) { /* géré ci-dessous par le cas "non trouvé" */ }
       }
+
+      if (cancelled) return
+
+      if (foundId) {
+        const isSoloFound = foundId.startsWith('solo_')
+        try { localStorage.setItem(isSoloFound ? 'avid_solo_id' : 'avid_athlete_id', foundId) } catch(e) {}
+        if (isSoloFound) setIsSolo(true)
+        setAthleteId(foundId)
+        setError(null)
+      } else {
+        setError('account_not_linked')
+      }
+      setLoading(false)
     })()
     return () => { cancelled = true }
   }, [error, authUser])
