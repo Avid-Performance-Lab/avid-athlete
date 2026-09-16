@@ -1220,6 +1220,49 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
         )
       })}
 
+      {!readOnly && !isPrescritEdit && local && local.length > 0 && (() => {
+        const nbExercices = local.length
+        let totalReps = 0, totalKg = 0, rpeSum = 0, rpeCount = 0
+        local.forEach(x => {
+          (x.series || []).forEach(s => {
+            const r = Number(s.reps) || 0, k = Number(s.kg) || 0
+            totalReps += r
+            totalKg += r * k
+          })
+          if (x.intensite !== '' && x.intensite != null) {
+            rpeSum += Number(x.intensite) || 0
+            rpeCount += 1
+          }
+        })
+        const avgRpe = rpeCount > 0 ? (rpeSum / rpeCount).toFixed(1) : '—'
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.green}`,
+            borderRadius: 10, padding: '14px 16px', marginBottom: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>
+              BILAN DE LA SÉANCE
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: C.purple, fontFamily: "'Barlow Condensed',sans-serif" }}>{nbExercices}</div>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>EXERCICES</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: C.blue, fontFamily: "'Barlow Condensed',sans-serif" }}>{totalKg > 0 ? totalKg.toLocaleString('fr-FR') : '—'}</div>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>KG</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: C.green, fontFamily: "'Barlow Condensed',sans-serif" }}>{totalReps > 0 ? totalReps : '—'}</div>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>REPS</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: C.red, fontFamily: "'Barlow Condensed',sans-serif" }}>{avgRpe}</div>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>RPE MOY.</div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {!readOnly && (
         <button onClick={() => setAddExoCatPicker(true)}
           style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
