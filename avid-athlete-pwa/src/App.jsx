@@ -275,7 +275,10 @@ export default function App() {
       })
       const collection_name = isSolo ? 'athletes_solo' : 'athletes'
       await setDoc(doc(db, collection_name, updatedAthlete.id), clean)
-    } catch (e) { notify('⚠ Erreur sauvegarde', C.red) }
+    } catch (e) {
+      console.error('saveAthlete', e.code, e.message)
+      notify('⚠ ' + (e.code || 'Erreur sauvegarde'), C.red)
+    }
   }
 
   async function createSoloProfil(formData) {
