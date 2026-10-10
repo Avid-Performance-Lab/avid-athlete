@@ -505,6 +505,31 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     setTimeout(() => setSemIdx(updated.blocs[blocI].semaines.length - 1), 300)
   }
 
+  function supprimerBloc(blocI) {
+    if (athlete.blocs.length <= 1) { notify('⚠ Impossible de supprimer le dernier bloc', C.red); return }
+    if (!window.confirm(`Supprimer « ${athlete.blocs[blocI].label} » et toutes ses semaines ?`)) return
+    const updated = JSON.parse(JSON.stringify(athlete))
+    updated.blocs.splice(blocI, 1)
+    saveAthlete(updated)
+    const newLen = updated.blocs.length
+    if (blocI < blocIdx) setBlocIdx(blocIdx - 1)
+    else if (blocI === blocIdx) { setBlocIdx(Math.min(blocI, newLen - 1)); setSemIdx(0) }
+    notify('✓ Bloc supprimé', C.green)
+  }
+
+  function supprimerSemaine(blocI, semI) {
+    const bloc = athlete.blocs[blocI]
+    if (bloc.semaines.length <= 1) { notify('⚠ Impossible de supprimer la dernière semaine', C.red); return }
+    if (!window.confirm(`Supprimer « ${bloc.semaines[semI].label} » et ses séances ?`)) return
+    const updated = JSON.parse(JSON.stringify(athlete))
+    updated.blocs[blocI].semaines.splice(semI, 1)
+    saveAthlete(updated)
+    const newLen = updated.blocs[blocI].semaines.length
+    if (semI < semIdx) setSemIdx(semIdx - 1)
+    else if (semI === semIdx) setSemIdx(Math.min(semI, newLen - 1))
+    notify('✓ Semaine supprimée', C.green)
+  }
+
   function dupliquerBloc(blocI) {
     const bloc = athlete.blocs[blocI]
     const newBloc = JSON.parse(JSON.stringify(bloc))
@@ -564,16 +589,26 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
   return (
     <div className="fade-in" style={{ padding: '16px 14px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>BLOCS</div>
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 9, paddingRight: 6, paddingBottom: 8, marginBottom: 14 }}>
         {athlete.blocs.map((b, i) => (
-          <button key={b.id} onClick={() => { setBlocIdx(i); setSemIdx(0) }}
-            style={{ flexShrink: 0, background: blocIdx === i ? C.yellow : C.card,
-              color: blocIdx === i ? C.navy : C.muted,
-              border: `1px solid ${blocIdx === i ? C.yellow : C.border}`,
-              borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 800,
-              cursor: 'pointer', letterSpacing: 1 }}>
-            {b.label}
-          </button>
+          <div key={b.id} style={{ position: 'relative', flexShrink: 0 }}>
+            <button onClick={() => { setBlocIdx(i); setSemIdx(0) }}
+              style={{ background: blocIdx === i ? C.yellow : C.card,
+                color: blocIdx === i ? C.navy : C.muted,
+                border: `1px solid ${blocIdx === i ? C.yellow : C.border}`,
+                borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 800,
+                cursor: 'pointer', letterSpacing: 1 }}>
+              {b.label}
+            </button>
+            {athlete.autonomie && athlete.blocs.length > 1 && (
+              <span onClick={e => { e.stopPropagation(); supprimerBloc(i) }}
+                style={{ position: 'absolute', top: -7, right: -5, width: 16, height: 16, borderRadius: '50%',
+                  background: C.red, color: '#fff', fontSize: 10, fontWeight: 900, lineHeight: '16px',
+                  textAlign: 'center', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.5)' }}>
+                ✕
+              </span>
+            )}
+          </div>
         ))}
       </div>
 
@@ -597,16 +632,26 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
       {bloc?.semaines?.length > 0 && (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>SEMAINE</div>
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 9, paddingRight: 6, paddingBottom: 8, marginBottom: 16 }}>
             {bloc.semaines.map((s, i) => (
-              <button key={s.id} onClick={() => setSemIdx(i)}
-                style={{ flexShrink: 0, background: semIdx === i ? C.white : C.card,
-                  color: semIdx === i ? C.bg : C.muted,
-                  border: `1px solid ${semIdx === i ? C.white : C.border}`,
-                  borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
-                  cursor: 'pointer', letterSpacing: 1 }}>
-                {s.label}
-              </button>
+              <div key={s.id} style={{ position: 'relative', flexShrink: 0 }}>
+                <button onClick={() => setSemIdx(i)}
+                  style={{ background: semIdx === i ? C.white : C.card,
+                    color: semIdx === i ? C.bg : C.muted,
+                    border: `1px solid ${semIdx === i ? C.white : C.border}`,
+                    borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', letterSpacing: 1 }}>
+                  {s.label}
+                </button>
+                {athlete.autonomie && bloc.semaines.length > 1 && (
+                  <span onClick={e => { e.stopPropagation(); supprimerSemaine(blocIdx, i) }}
+                    style={{ position: 'absolute', top: -7, right: -5, width: 16, height: 16, borderRadius: '50%',
+                      background: C.red, color: '#fff', fontSize: 10, fontWeight: 900, lineHeight: '16px',
+                      textAlign: 'center', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.5)' }}>
+                    ✕
+                  </span>
+                )}
+              </div>
             ))}
           </div>
           {athlete.autonomie && (
