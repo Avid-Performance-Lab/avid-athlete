@@ -422,6 +422,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     return Math.max(0, (lastBloc?.semaines?.length || 1) - 1)
   })
   const [openSea, setOpenSea] = useState(null)
+  const [editLabel, setEditLabel] = useState(null) // { type: 'bloc'|'sem', idx, value }
   const [addExFor, setAddExFor] = useState(null)
   const [exForm, setExForm] = useState({ nom: '', cat: 'JAMBES', nbSeries: 3, reps: 10, kg: 0, rpe: '' })
 
@@ -558,6 +559,35 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     setTimeout(() => { setBlocIdx(updated.blocs.length - 1); setSemIdx(0) }, 300)
   }
 
+  function validerLabel(value) {
+    const cur = editLabel
+    setEditLabel(null)
+    if (!cur || value == null) return
+    const v = value.trim()
+    const updated = JSON.parse(JSON.stringify(athlete))
+    const cible = cur.type === 'bloc' ? updated.blocs[cur.idx] : updated.blocs[blocIdx]?.semaines?.[cur.idx]
+    if (!cible || !v || v === cible.label) return
+    cible.label = v
+    saveAthlete(updated)
+    notify('✓ Renommé', C.green)
+  }
+
+  function labelInput(bg, color, border) {
+    return (
+      <input autoFocus value={editLabel.value}
+        onChange={e => setEditLabel({ ...editLabel, value: e.target.value })}
+        onFocus={e => { const n = e.target.value.length; e.target.setSelectionRange(n, n) }}
+        onBlur={e => validerLabel(e.target.dataset.cancel ? null : e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') e.target.blur()
+          if (e.key === 'Escape') { e.target.dataset.cancel = '1'; e.target.blur() }
+        }}
+        style={{ background: bg, color, border, borderRadius: 6, padding: '4px 10px',
+          fontSize: 16, fontWeight: 800, letterSpacing: 1, outline: 'none', fontFamily: 'inherit',
+          width: `${Math.max(6, editLabel.value.length + 2)}ch` }} />
+    )
+  }
+
   if (!athlete?.blocs?.length) return (
     <div style={{ padding: 32, textAlign: 'center' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
@@ -595,14 +625,19 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 9, paddingRight: 6, paddingBottom: 8, marginBottom: 14 }}>
         {athlete.blocs.map((b, i) => (
           <div key={b.id} style={{ position: 'relative', flexShrink: 0 }}>
-            <button onClick={() => { setBlocIdx(i); setSemIdx(0) }}
-              style={{ background: blocIdx === i ? C.yellow : C.card,
-                color: blocIdx === i ? C.navy : C.muted,
-                border: `1px solid ${blocIdx === i ? C.yellow : C.border}`,
-                borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 800,
-                cursor: 'pointer', letterSpacing: 1 }}>
-              {b.label}
-            </button>
+            {editLabel?.type === 'bloc' && editLabel.idx === i
+              ? labelInput(C.yellow, C.navy, `1px solid ${C.yellow}`)
+              : <button onClick={() => {
+                  if (blocIdx === i && athlete.autonomie) setEditLabel({ type: 'bloc', idx: i, value: b.label })
+                  else { setBlocIdx(i); setSemIdx(0) }
+                }}
+                style={{ background: blocIdx === i ? C.yellow : C.card,
+                  color: blocIdx === i ? C.navy : C.muted,
+                  border: `1px solid ${blocIdx === i ? C.yellow : C.border}`,
+                  borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 800,
+                  cursor: 'pointer', letterSpacing: 1 }}>
+                {b.label}
+              </button>}
             {athlete.autonomie && athlete.blocs.length > 1 && (
               <span onClick={e => { e.stopPropagation(); supprimerBloc(i) }}
                 style={{ position: 'absolute', top: -7, right: -5, width: 16, height: 16, borderRadius: '50%',
@@ -638,14 +673,19 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 9, paddingRight: 6, paddingBottom: 8, marginBottom: 16 }}>
             {bloc.semaines.map((s, i) => (
               <div key={s.id} style={{ position: 'relative', flexShrink: 0 }}>
-                <button onClick={() => setSemIdx(i)}
-                  style={{ background: semIdx === i ? C.white : C.card,
-                    color: semIdx === i ? C.bg : C.muted,
-                    border: `1px solid ${semIdx === i ? C.white : C.border}`,
-                    borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
-                    cursor: 'pointer', letterSpacing: 1 }}>
-                  {s.label}
-                </button>
+                {editLabel?.type === 'sem' && editLabel.idx === i
+                  ? labelInput(C.white, C.bg, `1px solid ${C.white}`)
+                  : <button onClick={() => {
+                      if (semIdx === i && athlete.autonomie) setEditLabel({ type: 'sem', idx: i, value: s.label })
+                      else setSemIdx(i)
+                    }}
+                    style={{ background: semIdx === i ? C.white : C.card,
+                      color: semIdx === i ? C.bg : C.muted,
+                      border: `1px solid ${semIdx === i ? C.white : C.border}`,
+                      borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
+                      cursor: 'pointer', letterSpacing: 1 }}>
+                    {s.label}
+                  </button>}
                 {athlete.autonomie && bloc.semaines.length > 1 && (
                   <span onClick={e => { e.stopPropagation(); supprimerSemaine(blocIdx, i) }}
                     style={{ position: 'absolute', top: -7, right: -5, width: 16, height: 16, borderRadius: '50%',
