@@ -291,9 +291,12 @@ export default function App() {
       nom: formData.nom,
       objectif: formData.objectif,
       sport: formData.sport,
-      taille: formData.taille || '',
-      poids: formData.poids || '',
-      sexe: formData.sexe || '',
+      taille: formData.consentPhysique ? (formData.taille || '') : '',
+      poids: formData.consentPhysique ? (formData.poids || '') : '',
+      sexe: formData.consentPhysique ? (formData.sexe || '') : '',
+      consentPhysique: !!formData.consentPhysique,
+      cguAcceptedAt: Date.now(),
+      cguVersion: CGU_VERSION,
       autonomie: true,
       isSolo: true,
       createdAt: Date.now(),
@@ -2772,12 +2775,34 @@ function LoginScreen({ athleteId }) {
   )
 }
 
+const CGU_VERSION = '2026-10'
+
+function ConsentBox({ checked, onChange, children }) {
+  return (
+    <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16, fontSize: 12, color: '#666', lineHeight: 1.5, cursor: 'pointer' }}>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)}
+        style={{ marginTop: 3, accentColor: '#E63946', flexShrink: 0 }} />
+      <span>{children}</span>
+    </label>
+  )
+}
+
+const CguLabel = (
+  <>
+    J'ai lu et j'accepte les{' '}
+    <a href="https://avidlab.fr/legal#cgu" target="_blank" rel="noopener noreferrer" style={{ color: '#E63946' }}>CGU</a>
+    {' '}et la{' '}
+    <a href="https://avidlab.fr/legal#confidentialite" target="_blank" rel="noopener noreferrer" style={{ color: '#E63946' }}>politique de confidentialité</a>.
+  </>
+)
+
 function SignupScreen({ athleteId, onDone }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState(null)
   const [resetSent, setResetSent] = useState(false)
+  const [cgu, setCgu] = useState(false)
 
   const inputStyle = {
     width: '100%', background: '#F5F5F3', border: '1px solid #E8E8E4',
@@ -2798,12 +2823,12 @@ function SignupScreen({ athleteId, onDone }) {
   }
 
   async function handleCreate() {
-    if (!email.trim() || password.length < 6) return
+    if (!email.trim() || password.length < 6 || !cgu) return
     setSaving(true)
     setErrorMsg(null)
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password)
-      await updateDoc(doc(db, 'athletes', athleteId), { uid: cred.user.uid })
+      await updateDoc(doc(db, 'athletes', athleteId), { uid: cred.user.uid, cguAcceptedAt: Date.now(), cguVersion: CGU_VERSION })
       onDone()
     } catch (e) {
       setErrorMsg(mapError(e.code))
@@ -2852,15 +2877,17 @@ function SignupScreen({ athleteId, onDone }) {
         {errorMsg && <div style={{ color: '#E63946', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
         {resetSent && <div style={{ color: '#1E8C45', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
 
-        <button onClick={handleCreate} disabled={saving}
+        <ConsentBox checked={cgu} onChange={setCgu}>{CguLabel}</ConsentBox>
+
+        <button onClick={handleCreate} disabled={saving || !cgu}
           style={{
             width: '100%', marginTop: 20, padding: '14px', borderRadius: 7, border: 'none',
             background: '#12151C', color: '#fff', fontWeight: 800, fontSize: 13,
-            letterSpacing: 2, textTransform: 'uppercase', cursor: saving ? 'default' : 'pointer',
-            opacity: saving ? 0.6 : 1, fontFamily: "'Barlow Condensed',sans-serif",
+            letterSpacing: 2, textTransform: 'uppercase', cursor: (saving || !cgu) ? 'default' : 'pointer',
+            opacity: (saving || !cgu) ? 0.5 : 1, fontFamily: "'Barlow Condensed',sans-serif",
             transition: 'background .2s',
           }}
-          onMouseEnter={e => !saving && (e.currentTarget.style.background = '#E63946')}
+          onMouseEnter={e => !saving && cgu && (e.currentTarget.style.background = '#E63946')}
           onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
           {saving ? 'Création...' : 'Créer mon compte'}
         </button>
@@ -2878,12 +2905,14 @@ function SignupScreen({ athleteId, onDone }) {
 }
 
 function SoloSetupScreen({ onCreate }) {
-  const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '', email: '', password: '' })
+  const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '', email: '', password: '', cgu: false, consentPhysique: false })
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const hasPhysique = !!(form.taille || form.poids || form.sexe)
+  const step2Ok = !hasPhysique || form.consentPhysique
 
   function mapSoloError(code) {
     const messages = {
@@ -2895,7 +2924,7 @@ function SoloSetupScreen({ onCreate }) {
   }
 
   async function handleCreate() {
-    if (!form.email.trim() || form.password.length < 6) return
+    if (!form.email.trim() || form.password.length < 6 || !form.cgu) return
     setSaving(true)
     setErrorMsg(null)
     try {
@@ -3026,11 +3055,19 @@ function SoloSetupScreen({ onCreate }) {
               </div>
             </div>
 
+            {hasPhysique && (
+              <div style={{ marginTop: -6, marginBottom: 18 }}>
+                <ConsentBox checked={form.consentPhysique} onChange={v => set('consentPhysique', v)}>
+                  J'accepte que ces informations (taille, poids, sexe), qui peuvent relever de ma santé, soient enregistrées pour suivre ma progression. Je peux les supprimer à tout moment.
+                </ConsentBox>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setStep(1)} style={btnSecondary}>← Retour</button>
-              <button onClick={() => setStep(3)} style={{ ...btnPrimary(true), flex: 2 }}
-                onMouseEnter={e => e.currentTarget.style.background = '#E63946'}
-                onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
+              <button onClick={() => step2Ok && setStep(3)} disabled={!step2Ok} style={{ ...btnPrimary(step2Ok), flex: 2 }}
+                onMouseEnter={e => step2Ok && (e.currentTarget.style.background = '#E63946')}
+                onMouseLeave={e => step2Ok && (e.currentTarget.style.background = '#12151C')}>
                 Suivant →
               </button>
             </div>
@@ -3069,10 +3106,12 @@ function SoloSetupScreen({ onCreate }) {
               </div>
             )}
 
+            <ConsentBox checked={form.cgu} onChange={v => set('cgu', v)}>{CguLabel}</ConsentBox>
+
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button onClick={() => setStep(2)} style={btnSecondary}>← Retour</button>
-              <button onClick={handleCreate} disabled={saving} style={{ ...btnPrimary(true), flex: 2, opacity: saving ? .6 : 1 }}
-                onMouseEnter={e => !saving && (e.currentTarget.style.background = '#E63946')}
+              <button onClick={handleCreate} disabled={saving || !form.cgu} style={{ ...btnPrimary(form.cgu), flex: 2, opacity: saving ? .6 : 1 }}
+                onMouseEnter={e => !saving && form.cgu && (e.currentTarget.style.background = '#E63946')}
                 onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
                 {saving ? 'Création...' : 'Commencer →'}
               </button>
