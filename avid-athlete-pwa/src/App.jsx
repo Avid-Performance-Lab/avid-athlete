@@ -423,6 +423,14 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
   })
   const [openSea, setOpenSea] = useState(null)
   const [editLabel, setEditLabel] = useState(null) // { type: 'bloc'|'sem', idx, value }
+  const [showDel, setShowDel] = useState(null) // { type: 'bloc'|'sem', idx } — croix affichée après appui long
+  const lpTimer = useRef(null)
+  const lpFired = useRef(false)
+  useEffect(() => {
+    if (!showDel) return
+    const t = setTimeout(() => setShowDel(null), 4000)
+    return () => clearTimeout(t)
+  }, [showDel])
   const [addExFor, setAddExFor] = useState(null)
   const [exForm, setExForm] = useState({ nom: '', cat: 'JAMBES', nbSeries: 3, reps: 10, kg: 0, rpe: '' })
 
@@ -559,6 +567,19 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     setTimeout(() => { setBlocIdx(updated.blocs.length - 1); setSemIdx(0) }, 300)
   }
 
+  function pressProps(type, idx) {
+    const stop = () => { clearTimeout(lpTimer.current) }
+    return {
+      onPointerDown: () => {
+        lpFired.current = false
+        clearTimeout(lpTimer.current)
+        lpTimer.current = setTimeout(() => { lpFired.current = true; setShowDel({ type, idx }) }, 500)
+      },
+      onPointerUp: stop, onPointerLeave: stop, onPointerCancel: stop,
+      onContextMenu: e => e.preventDefault(),
+    }
+  }
+
   function validerLabel(value) {
     const cur = editLabel
     setEditLabel(null)
@@ -624,10 +645,13 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
       <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>BLOCS</div>
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 9, paddingRight: 6, paddingBottom: 8, marginBottom: 14 }}>
         {athlete.blocs.map((b, i) => (
-          <div key={b.id} style={{ position: 'relative', flexShrink: 0 }}>
+          <div key={b.id} {...pressProps('bloc', i)}
+            style={{ position: 'relative', flexShrink: 0, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}>
             {editLabel?.type === 'bloc' && editLabel.idx === i
               ? labelInput(C.yellow, C.navy, `1px solid ${C.yellow}`)
               : <button onClick={() => {
+                  if (lpFired.current) { lpFired.current = false; return }
+                  setShowDel(null)
                   if (blocIdx === i && athlete.autonomie) setEditLabel({ type: 'bloc', idx: i, value: b.label })
                   else { setBlocIdx(i); setSemIdx(0) }
                 }}
@@ -638,10 +662,10 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                   cursor: 'pointer', letterSpacing: 1 }}>
                 {b.label}
               </button>}
-            {athlete.autonomie && athlete.blocs.length > 1 && (
-              <span onClick={e => { e.stopPropagation(); supprimerBloc(i) }}
+            {athlete.autonomie && athlete.blocs.length > 1 && showDel?.type === 'bloc' && showDel.idx === i && (
+              <span onClick={e => { e.stopPropagation(); setShowDel(null); supprimerBloc(i) }}
                 style={{ position: 'absolute', top: -7, right: -5, width: 16, height: 16, borderRadius: '50%',
-                  background: C.red, color: '#fff', fontSize: 10, fontWeight: 900, lineHeight: '16px',
+                  background: C.white, color: C.bg, fontSize: 10, fontWeight: 900, lineHeight: '16px',
                   textAlign: 'center', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.5)' }}>
                 ✕
               </span>
@@ -672,10 +696,13 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>SEMAINE</div>
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 9, paddingRight: 6, paddingBottom: 8, marginBottom: 16 }}>
             {bloc.semaines.map((s, i) => (
-              <div key={s.id} style={{ position: 'relative', flexShrink: 0 }}>
+              <div key={s.id} {...pressProps('sem', i)}
+                style={{ position: 'relative', flexShrink: 0, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}>
                 {editLabel?.type === 'sem' && editLabel.idx === i
                   ? labelInput(C.white, C.bg, `1px solid ${C.white}`)
                   : <button onClick={() => {
+                      if (lpFired.current) { lpFired.current = false; return }
+                      setShowDel(null)
                       if (semIdx === i && athlete.autonomie) setEditLabel({ type: 'sem', idx: i, value: s.label })
                       else setSemIdx(i)
                     }}
@@ -686,10 +713,10 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                       cursor: 'pointer', letterSpacing: 1 }}>
                     {s.label}
                   </button>}
-                {athlete.autonomie && bloc.semaines.length > 1 && (
-                  <span onClick={e => { e.stopPropagation(); supprimerSemaine(blocIdx, i) }}
+                {athlete.autonomie && bloc.semaines.length > 1 && showDel?.type === 'sem' && showDel.idx === i && (
+                  <span onClick={e => { e.stopPropagation(); setShowDel(null); supprimerSemaine(blocIdx, i) }}
                     style={{ position: 'absolute', top: -7, right: -5, width: 16, height: 16, borderRadius: '50%',
-                      background: C.red, color: '#fff', fontSize: 10, fontWeight: 900, lineHeight: '16px',
+                      background: C.white, color: C.bg, fontSize: 10, fontWeight: 900, lineHeight: '16px',
                       textAlign: 'center', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.5)' }}>
                     ✕
                   </span>
