@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { db, app } from './firebase.js'
+import { t, detectLang, saveLang, setCurrentLang } from './i18n.js'
 import { doc, onSnapshot, collection, query, where, setDoc, updateDoc, getDocs, getDoc } from 'firebase/firestore'
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
@@ -80,6 +81,28 @@ function InjectStyles() {
   return null
 }
 
+// ── Sélecteur de langue FR | EN ───────────────────────────────────────────────
+// fixed = couleurs figées (écran de connexion, qui n'utilise pas le thème C)
+function LangToggle({ lang, setLang, fixed = false }) {
+  const bd = fixed ? '#333' : C.border
+  const muted = fixed ? '#888' : C.muted
+  const active = fixed ? '#F2C94C' : C.yellow
+  return (
+    <div role="group" aria-label={t('lang_title')} title={t('lang_title')}
+      style={{ display: 'flex', border: `1px solid ${bd}`, borderRadius: 20, padding: 2, flexShrink: 0 }}>
+      {['fr', 'en'].map(l => (
+        <button key={l} onClick={() => setLang(l)} aria-pressed={lang === l}
+          style={{ border: 'none', cursor: 'pointer', borderRadius: 16, padding: '3px 6px',
+            fontSize: 9, fontWeight: 800, letterSpacing: 1, fontFamily: 'inherit', lineHeight: 1.3,
+            background: lang === l ? active : 'transparent',
+            color: lang === l ? '#1a1000' : muted }}>
+          {l.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [dark, setDark] = useState(() => {
@@ -98,6 +121,12 @@ export default function App() {
     document.body.style.color = C.text
     try { localStorage.setItem('avid_theme', dark ? 'dark' : 'light') } catch(e) {}
   }, [dark])
+
+  // Langue de l'interface (n'affecte jamais les données saisies par le coach)
+  const [lang, setLangState] = useState(() => detectLang())
+  setCurrentLang(lang) // AVANT le render des enfants, comme C pour le thème
+  const setLang = l => { setLangState(l); saveLang(l) }
+  useEffect(() => { document.documentElement.lang = lang }, [lang])
 
   const [athleteId, setAthleteId] = useState(null)
   const [athlete, setAthlete] = useState(null)
@@ -328,19 +357,19 @@ export default function App() {
   if (soloSetup) return <SoloSetupScreen onCreate={createSoloProfil} />
   if (error === 'no_id') {
     if (authUser === undefined) return <LoadingScreen />
-    if (authUser === null) return <LoginScreen athleteId={null} />
-    return <ErrorScreen msg="Lien invalide" sub="Demande un nouveau lien à ton coach." />
+    if (authUser === null) return <LoginScreen athleteId={null} lang={lang} setLang={setLang} />
+    return <ErrorScreen msg={t('err_invalid_link')} sub={t('err_invalid_link_sub')} />
   }
-  if (error === 'account_not_linked') return <ErrorScreen msg="Compte non lié" sub="Ce compte n'est associé à aucun profil athlète. Contacte ton coach." />
-  if (error === 'not_found') return <ErrorScreen msg="Athlète introuvable" sub="Ce lien ne correspond à aucun profil." />
-  if (error === 'needs_login') return <LoginScreen athleteId={athleteId} />
-  if (error === 'offline') return <ErrorScreen msg="Hors ligne" sub="Vérifie ta connexion et réessaie." />
+  if (error === 'account_not_linked') return <ErrorScreen msg={t('err_not_linked')} sub={t('err_not_linked_sub')} />
+  if (error === 'not_found') return <ErrorScreen msg={t('err_not_found')} sub={t('err_not_found_sub')} />
+  if (error === 'needs_login') return <LoginScreen athleteId={athleteId} lang={lang} setLang={setLang} />
+  if (error === 'offline') return <ErrorScreen msg={t('err_offline')} sub={t('err_offline_sub')} />
 
   const TABS = [
-    { id: 'profil',      icon: '👤', label: 'Profil' },
-    { id: 'programme',   icon: '📋', label: 'Programme' },
-    { id: 'stats',       icon: '📈', label: 'Stats' },
-    { id: 'nutrition',   icon: '🥗', label: 'Nutrition' },
+    { id: 'profil',      icon: '👤', label: t('tab_profil') },
+    { id: 'programme',   icon: '📋', label: t('tab_programme') },
+    { id: 'stats',       icon: '📈', label: t('tab_stats') },
+    { id: 'nutrition',   icon: '🥗', label: t('tab_nutrition') },
   ]
 
   return (
@@ -364,7 +393,7 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: online ? C.green : C.red }} />
           <button onClick={() => setDark(d => !d)}
-            title={dark ? 'Mode clair' : 'Mode sombre'}
+            title={dark ? t('theme_light_title') : t('theme_dark_title')}
             style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 20,
               width: 42, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center',
               padding: '0 3px', flexShrink: 0 }}>
@@ -383,7 +412,7 @@ export default function App() {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', paddingBottom: 80 }}>
-        {tab === 'profil'    && <ProfilView athlete={athlete} cahiers={cahiers} isSolo={isSolo} saveAthlete={saveAthlete} notify={notify} />}
+        {tab === 'profil'    && <ProfilView athlete={athlete} cahiers={cahiers} isSolo={isSolo} saveAthlete={saveAthlete} notify={notify} lang={lang} setLang={setLang} />}
         {tab === 'programme' && <ProgrammeView athlete={athlete} cahiers={cahiers} saveCahier={saveCahier} notify={notify} saveAthlete={saveAthlete} />}
         {tab === 'stats'     && <StatsView athlete={athlete} cahiers={cahiers} />}
         {tab === 'nutrition' && <NutritionView athleteId={athleteId} nutri={nutri} saveNutri={saveNutri} notify={notify} />}
@@ -393,14 +422,14 @@ export default function App() {
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
         background: C.panel, borderTop: `1px solid ${C.border}`,
         display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
+        {TABS.map(tb => (
+          <button key={tb.id} onClick={() => setTab(tb.id)}
             style={{ flex: 1, border: 'none', background: 'none', padding: '10px 4px 8px',
               cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-            <span style={{ fontSize: 20, filter: tab === t.id ? 'none' : 'grayscale(1) opacity(.5)' }}>{t.icon}</span>
+            <span style={{ fontSize: 20, filter: tab === tb.id ? 'none' : 'grayscale(1) opacity(.5)' }}>{tb.icon}</span>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1,
-              color: tab === t.id ? C.yellow : C.muted }}>{t.label.toUpperCase()}</span>
-            {tab === t.id && <div style={{ width: 20, height: 2, background: C.yellow, borderRadius: 1 }} />}
+              color: tab === tb.id ? C.yellow : C.muted }}>{tb.label.toUpperCase()}</span>
+            {tab === tb.id && <div style={{ width: 20, height: 2, background: C.yellow, borderRadius: 1 }} />}
           </button>
         ))}
       </div>
@@ -2374,7 +2403,7 @@ function PersonalRecords({ athlete, cahiers }) {
 }
 
 // ── Profil View ───────────────────────────────────────────────────────────────
-function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
+function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLang }) {
   if (!athlete) return null
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ prenom: athlete.prenom || '', nom: athlete.nom || '', objectif: athlete.objectif || '', sport: athlete.sport || '', taille: athlete.taille || '', poids: athlete.poids || '', age: athlete.age || '', sexe: athlete.sexe || '' })
@@ -2651,6 +2680,25 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
         )
       })()}
 
+      <div style={{ marginTop: 20, background: C.card, borderRadius: 10, padding: '14px 16px',
+        border: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>
+          🌐 {t('profile_language')}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[['fr', 'Français'], ['en', 'English']].map(([code, name]) => (
+            <button key={code} onClick={() => setLang(code)} aria-pressed={lang === code}
+              style={{ flex: 1, padding: '10px 0', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                fontSize: 13, fontWeight: 800, letterSpacing: 1,
+                border: `1px solid ${lang === code ? C.yellow : C.border}`,
+                background: lang === code ? C.yellow : 'transparent',
+                color: lang === code ? '#1a1000' : C.muted }}>
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div style={{ marginTop: 20, background: '#0a1020', borderRadius: 10, padding: '14px 16px',
         border: `1px solid ${C.blue}` }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: C.blue, letterSpacing: 2, marginBottom: 6 }}>
@@ -2668,7 +2716,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify }) {
 // ── Loading & Error ───────────────────────────────────────────────────────────
 
 // ── Solo Setup Screen ─────────────────────────────────────────────────────────
-function LoginScreen({ athleteId }) {
+function LoginScreen({ athleteId, lang, setLang }) {
   const [email, setEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '')
   const [password, setPassword] = useState('')
   const [saving, setSaving] = useState(false)
@@ -2686,13 +2734,13 @@ function LoginScreen({ athleteId }) {
 
   function mapError(code) {
     const messages = {
-      'auth/invalid-email': 'Email invalide.',
-      'auth/invalid-credential': 'Email ou mot de passe incorrect.',
-      'auth/user-not-found': 'Aucun compte associé à cet email.',
-      'auth/wrong-password': 'Mot de passe incorrect.',
-      'auth/too-many-requests': 'Trop de tentatives, réessaie dans quelques minutes.',
+      'auth/invalid-email': t('auth_invalid_email'),
+      'auth/invalid-credential': t('auth_invalid_credential'),
+      'auth/user-not-found': t('auth_user_not_found'),
+      'auth/wrong-password': t('auth_wrong_password'),
+      'auth/too-many-requests': t('auth_too_many'),
     }
-    return messages[code] || 'Une erreur est survenue, réessaie.'
+    return messages[code] || t('auth_generic')
   }
 
   async function handleLogin() {
@@ -2710,7 +2758,7 @@ function LoginScreen({ athleteId }) {
   }
 
   async function handleResetPassword() {
-    if (!email.trim()) { setErrorMsg('Entre ton email pour recevoir le lien.'); return }
+    if (!email.trim()) { setErrorMsg(t('login_need_email')); return }
     try {
       await sendPasswordResetEmail(auth, email.trim())
       setResetSent(true)
@@ -2724,32 +2772,32 @@ function LoginScreen({ athleteId }) {
       <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 24, width: 'auto' }} />
         <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
+        <div style={{ marginLeft: 'auto' }}><LangToggle lang={lang} setLang={setLang} fixed /></div>
       </div>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }} className="fade-in">
         <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
-          Reconnecte-toi
+          {t('login_title')}
         </div>
         <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
-          Ta session a expiré ou tu es sur un nouvel appareil. Entre ton email et ton
-          mot de passe pour retrouver ton programme et ton historique.
+          {t('login_intro')}
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={labelStyle}>EMAIL</label>
-          <input style={inputStyle} type="email" placeholder="ton@email.com" value={email}
+          <label style={labelStyle}>{t('login_email')}</label>
+          <input style={inputStyle} type="email" placeholder={t('login_email_ph')} value={email}
             onChange={e => setEmail(e.target.value)} />
         </div>
 
         <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>MOT DE PASSE</label>
-          <input style={inputStyle} type="password" placeholder="Ton mot de passe" value={password}
+          <label style={labelStyle}>{t('login_password')}</label>
+          <input style={inputStyle} type="password" placeholder={t('login_password_ph')} value={password}
             onChange={e => setPassword(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()} />
         </div>
 
         {errorMsg && <div style={{ color: '#E63946', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
-        {resetSent && <div style={{ color: '#1E8C45', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
+        {resetSent && <div style={{ color: '#1E8C45', fontSize: 13, marginTop: 10 }}>{t('login_reset_sent')}</div>}
 
         <button onClick={handleLogin} disabled={saving}
           style={{
@@ -2761,12 +2809,12 @@ function LoginScreen({ athleteId }) {
           }}
           onMouseEnter={e => !saving && (e.currentTarget.style.background = '#E63946')}
           onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
-          {saving ? 'Connexion...' : 'Se connecter'}
+          {saving ? t('login_busy') : t('login_btn')}
         </button>
 
         <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#AAA' }}>
           <span onClick={handleResetPassword} style={{ color: '#888', textDecoration: 'underline', cursor: 'pointer' }}>
-            Mot de passe oublié
+            {t('login_forgot')}
           </span>
         </div>
       </div>
@@ -3132,7 +3180,7 @@ function LoadingScreen() {
       <div style={{ width: 40, height: 40, border: `3px solid ${C.border}`,
         borderTop: `3px solid ${C.yellow}`, borderRadius: '50%',
         animation: 'spin 0.8s linear infinite', marginBottom: 20 }} />
-      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, letterSpacing: 2 }}>CHARGEMENT...</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, letterSpacing: 2 }}>{t('loading')}</div>
     </div>
   )
 }
