@@ -560,3 +560,10 @@ export function catBadge(cat) {
   const k = String(cat).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   return CAT_BADGE_EN[k] || cat
 }
+
+// Nom de bloc STOCKÉ affiché à l'utilisateur : « BLOCK 1 » (import Excel / dashboard) → « BLOC 1 ».
+// AFFICHAGE seulement : la valeur enregistrée n'est jamais modifiée.
+export function blocText(label) {
+  if (typeof label !== 'string') return label
+  return label.replace(/\bBLOCK\b/g, 'BLOC').replace(/\bBlock\b/g, 'Bloc').replace(/\bblock\b/g, 'bloc')
+}

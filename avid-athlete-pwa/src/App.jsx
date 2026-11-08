@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { db, app } from './firebase.js'
-import { t, tf, catLabel, cardioLabel, effortLabel, sexLabel, catBadge, numLocale, dateLocale, detectLang, saveLang, setCurrentLang } from './i18n.js'
+import { t, tf, catLabel, cardioLabel, effortLabel, sexLabel, catBadge, blocText, numLocale, dateLocale, detectLang, saveLang, setCurrentLang } from './i18n.js'
 import { doc, onSnapshot, collection, query, where, setDoc, updateDoc, getDocs, getDoc } from 'firebase/firestore'
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
@@ -552,7 +552,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 
   function supprimerBloc(blocI) {
     if (athlete.blocs.length <= 1) { notify(t('warn_last_block'), C.red); return }
-    if (!window.confirm(tf('confirm_del_block', { name: athlete.blocs[blocI].label }))) return
+    if (!window.confirm(tf('confirm_del_block', { name: blocText(athlete.blocs[blocI].label) }))) return
     const updated = JSON.parse(JSON.stringify(athlete))
     updated.blocs.splice(blocI, 1)
     saveAthlete(updated)
@@ -693,7 +693,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                   border: `1px solid ${blocIdx === i ? C.yellow : C.border}`,
                   borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 800,
                   cursor: 'pointer', letterSpacing: 1 }}>
-                {b.label}
+                {blocText(b.label)}
               </button>}
             {athlete.autonomie && athlete.blocs.length > 1 && showDel?.type === 'bloc' && showDel.idx === i && (
               <span onClick={e => { e.stopPropagation(); setShowDel(null); supprimerBloc(i) }}
@@ -1569,7 +1569,7 @@ function StatsView({ athlete, cahiers }) {
           const cahier = cahiers[key]
           if (!cahier?.data) return
 
-          const lbl = `${(bloc.label||'').replace('BLOCK ','B')}·${sem.label||''}`
+          const lbl = `${(bloc.label||'').replace(/BLOCK? /,'B')}·${sem.label||''}`
           const date = cahier.updatedAt || 0
 
           // RPE moyen séance
@@ -2354,7 +2354,7 @@ function PersonalRecords({ athlete, cahiers }) {
             if (kg > 0 && (!prs[ex.nom] || kg > prs[ex.nom].kg)) {
               prs[ex.nom] = {
                 kg, reps: parseFloat(s.reps) || null,
-                label: `${bloc.label.replace('BLOCK ', 'B')} / ${sem.label}`,
+                label: `${bloc.label.replace(/BLOCK? /, 'B')} / ${sem.label}`,
                 cat: ex.cat,
               }
             }
