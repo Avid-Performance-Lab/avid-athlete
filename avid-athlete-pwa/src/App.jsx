@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { db, app } from './firebase.js'
-import { t, detectLang, saveLang, setCurrentLang } from './i18n.js'
+import { t, tf, catLabel, cardioLabel, effortLabel, sexLabel, catBadge, numLocale, dateLocale, detectLang, saveLang, setCurrentLang } from './i18n.js'
 import { doc, onSnapshot, collection, query, where, setDoc, updateDoc, getDocs, getDoc } from 'firebase/firestore'
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
@@ -348,13 +348,14 @@ export default function App() {
   if (signupAthleteId) return (
     <SignupScreen
       athleteId={signupAthleteId}
+      lang={lang} setLang={setLang}
       onDone={() => {
         window.location.href = window.location.origin + window.location.pathname + '?id=' + signupAthleteId
       }}
     />
   )
   if (loading) return <LoadingScreen />
-  if (soloSetup) return <SoloSetupScreen onCreate={createSoloProfil} />
+  if (soloSetup) return <SoloSetupScreen onCreate={createSoloProfil} lang={lang} setLang={setLang} />
   if (error === 'no_id') {
     if (authUser === undefined) return <LoadingScreen />
     if (authUser === null) return <LoginScreen athleteId={null} lang={lang} setLang={setLang} />
@@ -467,40 +468,40 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
   const [exForm, setExForm] = useState({ nom: '', cat: 'JAMBES', nbSeries: 3, reps: 10, kg: 0, rpe: '' })
 
   function ajouterBloc() {
-    const label = window.prompt('Nom du nouveau bloc ?', `Bloc ${athlete.blocs.length + 1}`)
+    const label = window.prompt(t('prompt_new_block'), `${t('default_block')} ${athlete.blocs.length + 1}`)
     if (!label) return
     const updated = JSON.parse(JSON.stringify(athlete))
     updated.blocs.push({ id: uid(), label, semaines: [{ id: uid(), label: 'Semaine 1', seances: [] }] })
     saveAthlete(updated)
-    notify('✓ Bloc créé', C.green)
+    notify(t('ok_block_created'), C.green)
     setTimeout(() => { setBlocIdx(updated.blocs.length - 1); setSemIdx(0) }, 300)
   }
 
   function ajouterSemaine(blocI) {
     const bloc = athlete.blocs[blocI]
-    const label = window.prompt('Nom de la nouvelle semaine ?', `Semaine ${bloc.semaines.length + 1}`)
+    const label = window.prompt(t('prompt_new_week'), `${t('default_week')} ${bloc.semaines.length + 1}`)
     if (!label) return
     const updated = JSON.parse(JSON.stringify(athlete))
     updated.blocs[blocI].semaines.push({ id: uid(), label, seances: [] })
     saveAthlete(updated)
-    notify('✓ Semaine créée', C.green)
+    notify(t('ok_week_created'), C.green)
     setTimeout(() => setSemIdx(updated.blocs[blocI].semaines.length - 1), 300)
   }
 
   function ajouterSeance(blocI, semI) {
     const sem = athlete.blocs[blocI].semaines[semI]
-    const label = window.prompt('Nom de la séance ? (ex: UPPER, LOWER, FULLBODY)', 'FULLBODY')
+    const label = window.prompt(t('prompt_new_session'), 'FULLBODY')
     if (!label) return
     const updated = JSON.parse(JSON.stringify(athlete))
     updated.blocs[blocI].semaines[semI].seances.push({
       id: uid(), label: label.toUpperCase(), num: (sem.seances?.length || 0) + 1, exercices: []
     })
     saveAthlete(updated)
-    notify('✓ Séance créée', C.green)
+    notify(t('ok_session_created'), C.green)
   }
 
   function ajouterExercice(seaI) {
-    if (!exForm.nom.trim()) { notify('⚠ Nom de l\'exercice requis', C.red); return }
+    if (!exForm.nom.trim()) { notify(t('warn_ex_name'), C.red); return }
     const updated = JSON.parse(JSON.stringify(athlete))
     const seaRef = updated.blocs[blocIdx].semaines[semIdx].seances[seaI]
     seaRef.exercices = seaRef.exercices || []
@@ -511,18 +512,18 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
       }))
     })
     saveAthlete(updated)
-    notify('✓ Exercice ajouté', C.green)
+    notify(t('ok_ex_added'), C.green)
     setAddExFor(null)
     setExForm({ nom: '', cat: 'JAMBES', nbSeries: 3, reps: 10, kg: 0, rpe: '' })
   }
 
   function supprimerExercice(seaI, exId) {
-    if (!window.confirm('Supprimer cet exercice ?')) return
+    if (!window.confirm(t('confirm_del_ex'))) return
     const updated = JSON.parse(JSON.stringify(athlete))
     const seaRef = updated.blocs[blocIdx].semaines[semIdx].seances[seaI]
     seaRef.exercices = (seaRef.exercices || []).filter(ex => ex.id !== exId)
     saveAthlete(updated)
-    notify('✓ Exercice supprimé', C.green)
+    notify(t('ok_ex_deleted'), C.green)
   }
 
   function dupliquerSemaine(blocI, semI) {
@@ -531,7 +532,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     // Copie avec structure prescrite, cahier vide (nouvelles IDs)
     const newSem = JSON.parse(JSON.stringify(sem))
     newSem.id = uid()
-    newSem.label = sem.label + ' (copie)'
+    newSem.label = sem.label + t('copy_suffix')
     newSem.seances = newSem.seances.map(sea => ({
       ...sea,
       id: uid(),
@@ -544,41 +545,41 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     const updated = JSON.parse(JSON.stringify(athlete))
     updated.blocs[blocI].semaines.push(newSem)
     saveAthlete(updated)
-    notify('✓ Semaine dupliquée à la fin du programme', C.green)
+    notify(t('ok_week_dup'), C.green)
     // Naviguer vers la nouvelle semaine
     setTimeout(() => setSemIdx(updated.blocs[blocI].semaines.length - 1), 300)
   }
 
   function supprimerBloc(blocI) {
-    if (athlete.blocs.length <= 1) { notify('⚠ Impossible de supprimer le dernier bloc', C.red); return }
-    if (!window.confirm(`Supprimer « ${athlete.blocs[blocI].label} » et toutes ses semaines ?`)) return
+    if (athlete.blocs.length <= 1) { notify(t('warn_last_block'), C.red); return }
+    if (!window.confirm(tf('confirm_del_block', { name: athlete.blocs[blocI].label }))) return
     const updated = JSON.parse(JSON.stringify(athlete))
     updated.blocs.splice(blocI, 1)
     saveAthlete(updated)
     const newLen = updated.blocs.length
     if (blocI < blocIdx) setBlocIdx(blocIdx - 1)
     else if (blocI === blocIdx) { setBlocIdx(Math.min(blocI, newLen - 1)); setSemIdx(0) }
-    notify('✓ Bloc supprimé', C.green)
+    notify(t('ok_block_deleted'), C.green)
   }
 
   function supprimerSemaine(blocI, semI) {
     const bloc = athlete.blocs[blocI]
-    if (bloc.semaines.length <= 1) { notify('⚠ Impossible de supprimer la dernière semaine', C.red); return }
-    if (!window.confirm(`Supprimer « ${bloc.semaines[semI].label} » et ses séances ?`)) return
+    if (bloc.semaines.length <= 1) { notify(t('warn_last_week'), C.red); return }
+    if (!window.confirm(tf('confirm_del_week', { name: bloc.semaines[semI].label }))) return
     const updated = JSON.parse(JSON.stringify(athlete))
     updated.blocs[blocI].semaines.splice(semI, 1)
     saveAthlete(updated)
     const newLen = updated.blocs[blocI].semaines.length
     if (semI < semIdx) setSemIdx(semIdx - 1)
     else if (semI === semIdx) setSemIdx(Math.min(semI, newLen - 1))
-    notify('✓ Semaine supprimée', C.green)
+    notify(t('ok_week_deleted'), C.green)
   }
 
   function dupliquerBloc(blocI) {
     const bloc = athlete.blocs[blocI]
     const newBloc = JSON.parse(JSON.stringify(bloc))
     newBloc.id = uid()
-    newBloc.label = bloc.label + ' (copie)'
+    newBloc.label = bloc.label + t('copy_suffix')
     newBloc.semaines = newBloc.semaines.map(sem => ({
       ...sem,
       id: uid(),
@@ -595,7 +596,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     const updated = JSON.parse(JSON.stringify(athlete))
     updated.blocs.push(newBloc)
     saveAthlete(updated)
-    notify('✓ Bloc dupliqué à la fin du programme', C.green)
+    notify(t('ok_block_dup'), C.green)
     setTimeout(() => { setBlocIdx(updated.blocs.length - 1); setSemIdx(0) }, 300)
   }
 
@@ -622,7 +623,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     if (!cible || !v || v === cible.label) return
     cible.label = v
     saveAthlete(updated)
-    notify('✓ Renommé', C.green)
+    notify(t('ok_renamed'), C.green)
   }
 
   function labelInput(bg, color, border) {
@@ -644,7 +645,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
   if (!athlete?.blocs?.length) return (
     <div style={{ padding: 32, textAlign: 'center' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-      <div style={{ fontSize: 14, color: C.muted }}>Aucun programme disponible</div>
+      <div style={{ fontSize: 14, color: C.muted }}>{t('no_program')}</div>
     </div>
   )
 
@@ -674,7 +675,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
 
   return (
     <div className="fade-in" style={{ padding: '16px 14px' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>BLOCS</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>{t('sec_blocks')}</div>
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 9, paddingRight: 6, paddingBottom: 8, marginBottom: 14 }}>
         {athlete.blocs.map((b, i) => (
           <div key={b.id} {...pressProps('bloc', i)}
@@ -712,20 +713,20 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
             style={{ background: 'transparent', border: `1px dashed ${C.green}`,
               borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
               color: C.green, cursor: 'pointer', letterSpacing: 1 }}>
-            + Dupliquer ce bloc
+            {t('dup_block')}
           </button>
           <button onClick={ajouterBloc}
             style={{ background: 'transparent', border: `1px dashed ${C.yellow}`,
               borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
               color: C.yellow, cursor: 'pointer', letterSpacing: 1 }}>
-            + Nouveau bloc
+            {t('new_block')}
           </button>
         </div>
       )}
 
       {bloc?.semaines?.length > 0 && (
         <>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>SEMAINE</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>{t('sec_week')}</div>
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 9, paddingRight: 6, paddingBottom: 8, marginBottom: 16 }}>
             {bloc.semaines.map((s, i) => (
               <div key={s.id} {...pressProps('sem', i)}
@@ -763,14 +764,14 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                   border: `1px dashed ${C.yellow}`, borderRadius: 6,
                   padding: '5px 14px', fontSize: 11, fontWeight: 700,
                   color: C.yellow, cursor: 'pointer', letterSpacing: 1 }}>
-                + Dupliquer cette semaine
+                {t('dup_week')}
               </button>
               <button onClick={() => ajouterSemaine(blocIdx)}
                 style={{ background: 'transparent',
                   border: `1px dashed ${C.blue}`, borderRadius: 6,
                   padding: '5px 14px', fontSize: 11, fontWeight: 700,
                   color: C.blue, cursor: 'pointer', letterSpacing: 1 }}>
-                + Nouvelle semaine
+                {t('new_week')}
               </button>
             </div>
           )}
@@ -788,14 +789,14 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 9, fontWeight: 800,
                 padding: '2px 10px', borderRadius: 3, letterSpacing: 1 }}>{sea.label}</div>
-              <div style={{ fontSize: 10, color: C.muted }}>S{sea.num} · {exCount} exercice{exCount !== 1 ? 's' : ''}</div>
-              {isDone && <div style={{ fontSize: 10, color: C.green, fontWeight: 700, marginLeft: 'auto' }}>✓ COMPLÉTÉ</div>}
+              <div style={{ fontSize: 10, color: C.muted }}>S{sea.num} · {exCount} {exCount !== 1 ? t('exercises') : t('exercise')}</div>
+              {isDone && <div style={{ fontSize: 10, color: C.green, fontWeight: 700, marginLeft: 'auto' }}>{t('done_caps')}</div>}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div onClick={() => setOpenSea({ idx: i, mode: 'prescrit' })}
                 style={{ background: C.card, borderRadius: 10, padding: '12px 14px',
                   border: `1px solid ${C.border}`, borderTop: `3px solid ${cc.bg}`, cursor: 'pointer' }}>
-                <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, letterSpacing: 1, marginBottom: 6 }}>📋 PRESCRIT</div>
+                <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, letterSpacing: 1, marginBottom: 6 }}>{t('prescribed_caps')}</div>
                 {sea.exercices?.slice(0, 3).map(ex => (
                   <div key={ex.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ fontSize: 10, color: C.muted, overflow: 'hidden',
@@ -812,11 +813,11 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                   <div style={{ fontSize: 10, color: C.muted }}>+{sea.exercices.length - 3} autres</div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                  <div style={{ fontSize: 10, color: cc.bg, fontWeight: 700 }}>Voir détail ›</div>
+                  <div style={{ fontSize: 10, color: cc.bg, fontWeight: 700 }}>{t('view_detail')}</div>
                   {athlete.autonomie && (
                     <div onClick={e => { e.stopPropagation(); setAddExFor(addExFor === i ? null : i) }}
                       style={{ fontSize: 10, color: C.yellow, fontWeight: 800, cursor: 'pointer' }}>
-                      {addExFor === i ? '✕ Fermer' : '+ Exercice'}
+                      {addExFor === i ? t('close_x') : t('add_exercise_short')}
                     </div>
                   )}
                 </div>
@@ -826,7 +827,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                   border: `1px solid ${isDone ? C.green : C.border}`,
                   borderTop: `3px solid ${isDone ? C.green : C.muted}`, cursor: 'pointer' }}>
                 <div style={{ fontSize: 9, fontWeight: 800, color: isDone ? C.green : C.muted,
-                  letterSpacing: 1, marginBottom: 6 }}>✏️ MON CAHIER</div>
+                  letterSpacing: 1, marginBottom: 6 }}>{t('my_log')}</div>
                 {isDone ? cahierSea?.slice(0, 3).map((c, ci) => {
                   const kgs = c.series?.filter(s => parseFloat(s.kg) > 0).map(s => s.kg)
                   return kgs?.length > 0 ? (
@@ -836,58 +837,58 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                     </div>
                   ) : null
                 }) : (
-                  <div style={{ fontSize: 11, color: C.muted }}>Séance non remplie</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{t('session_unfilled')}</div>
                 )}
                 <div style={{ fontSize: 10, color: isDone ? C.green : C.yellow,
-                  fontWeight: 700, marginTop: 8 }}>{isDone ? 'Modifier ›' : 'Remplir ›'}</div>
+                  fontWeight: 700, marginTop: 8 }}>{isDone ? t('edit_arrow') : t('fill_arrow')}</div>
               </div>
             </div>
             {addExFor === i && (
               <div style={{ background: C.card, border: `1px dashed ${C.yellow}`, borderRadius: 10,
                 padding: 12, marginTop: 8 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 4 }}>NOM DE L'EXERCICE</div>
-                <input placeholder="Ex: Développé couché" value={exForm.nom}
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 4 }}>{t('f_exercise_name')}</div>
+                <input placeholder={t('ph_exercise_example')} value={exForm.nom}
                   onChange={e => setExForm(f => ({ ...f, nom: e.target.value }))}
                   style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`,
                     borderRadius: 6, padding: '8px 10px', color: C.text, fontSize: 12,
                     marginBottom: 10, boxSizing: 'border-box' }} />
                 <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr', gap: 6 }}>
                   <div>
-                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>CATÉGORIE</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>{t('f_category')}</div>
                     <select value={exForm.cat} onChange={e => setExForm(f => ({ ...f, cat: e.target.value }))}
                       style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
                         padding: '7px 4px', color: C.text, fontSize: 10, boxSizing: 'border-box' }}>
-                      <option value="JAMBES">Jambes</option>
-                      <option value="POUSSEE">Poussée</option>
-                      <option value="TIRAGE">Tirage</option>
-                      <option value="FULL BODY">Full Body</option>
-                      <option value="CARDIO">Cardio</option>
-                      <option value="AUTRES">Autres</option>
+                      <option value="JAMBES">{catLabel('JAMBES')}</option>
+                      <option value="POUSSEE">{catLabel('POUSSEE')}</option>
+                      <option value="TIRAGE">{catLabel('TIRAGE')}</option>
+                      <option value="FULL BODY">{catLabel('FULL BODY')}</option>
+                      <option value="CARDIO">{catLabel('CARDIO')}</option>
+                      <option value="AUTRES">{catLabel('AUTRES')}</option>
                     </select>
                   </div>
                   <div>
-                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>SÉRIES</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>{t('f_sets')}</div>
                     <input type="number" value={exForm.nbSeries}
                       onChange={e => setExForm(f => ({ ...f, nbSeries: e.target.value }))}
                       style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
                         padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>RÉPÉT.</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>{t('f_reps_short')}</div>
                     <input type="number" value={exForm.reps}
                       onChange={e => setExForm(f => ({ ...f, reps: e.target.value }))}
                       style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
                         padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>CHARGE (KG)</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>{t('f_load_kg')}</div>
                     <input type="number" value={exForm.kg}
                       onChange={e => setExForm(f => ({ ...f, kg: e.target.value }))}
                       style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
                         padding: '7px 4px', color: C.text, fontSize: 11, width: '100%', boxSizing: 'border-box' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>RPE CIBLE</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: .5, marginBottom: 3 }}>{t('f_target_rpe')}</div>
                     <input type="number" min="1" max="10" placeholder="/10" value={exForm.rpe}
                       onChange={e => setExForm(f => ({ ...f, rpe: e.target.value }))}
                       style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6,
@@ -898,7 +899,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
                   style={{ background: C.yellow, color: C.navy, border: 'none', borderRadius: 6,
                     padding: '7px 16px', fontSize: 11, fontWeight: 800, letterSpacing: 1, cursor: 'pointer',
                     marginTop: 10 }}>
-                  Ajouter l'exercice
+                  {t('add_the_exercise')}
                 </button>
               </div>
             )}
@@ -910,7 +911,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
           style={{ background: 'transparent', border: `1px dashed ${C.purple}`, borderRadius: 6,
             padding: '8px 16px', fontSize: 11, fontWeight: 700, color: C.purple,
             cursor: 'pointer', letterSpacing: 1, width: '100%', marginTop: 4 }}>
-          + Nouvelle séance
+          {t('new_session')}
         </button>
       )}
     </div>
@@ -988,12 +989,12 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
       }))
       onSavePrescrit(newExercices)
       setSaving(false)
-      notify('✓ Programme mis à jour !', C.green)
+      notify(t('ok_program_updated'), C.green)
       return
     }
     await onSaveCahier(local)
     setSaving(false)
-    notify('✓ Séance sauvegardée !', C.green)
+    notify(t('ok_session_saved'), C.green)
   }
 
   function addSerieToExo(ei) {
@@ -1053,7 +1054,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
             letterSpacing: 1, whiteSpace: 'nowrap', overflow: 'hidden',
             textOverflow: 'ellipsis' }}>{seance.label}</div>
           <div style={{ fontSize: 9, color: C.muted }}>
-            Séance {seance.num} · {seance.exercices?.length || 0} exercices
+            {t('session_word')} {seance.num} · {seance.exercices?.length || 0} {t('exercises')}
           </div>
         </div>
         {saving && (
@@ -1076,11 +1077,11 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
             <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`,
               display: 'flex', alignItems: 'center', gap: 10, background: C.inset }}>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 9, fontWeight: 800,
-                padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{exDisp.cat}</div>
+                padding: '2px 8px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>{catBadge(exDisp.cat)}</div>
               {(!readOnly && (isAdded || isPrescritEdit)) ? (
                 <input value={local?.[ei]?.nom || ''}
                   onChange={e => updateExoNom(ei, e.target.value)}
-                  placeholder="Nom de l'exercice"
+                  placeholder={t('ph_exercise_name')}
                   style={{ background: 'none', border: 'none', borderBottom: `1px solid ${C.yellow}`,
                     fontSize: 13, fontWeight: 800, color: C.white, flex: 1, outline: 'none' }}/>
               ) : (
@@ -1113,7 +1114,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                 !readOnly ? (
                   <div>
                     {/* Sous-type */}
-                    <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>TYPE D'ACTIVITÉ</div>
+                    <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 6, fontWeight: 700 }}>{t('activity_type')}</div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
                       {CARDIO_SUBTYPES.map(t => (
                         <button key={t} onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, cardioType: t } : x))}
@@ -1122,15 +1123,15 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                             background: local?.[ei]?.cardioType === t ? 'rgba(234,67,53,.15)' : C.card,
                             color: local?.[ei]?.cardioType === t ? C.red : C.muted,
                             fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                          {t}
+                          {cardioLabel(t)}
                         </button>
                       ))}
                     </div>
                     {/* Blocs effort */}
                     <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 1fr 1fr 1fr 1fr 18px', gap: 5, marginBottom: 6, fontSize: 8, color: C.muted, fontWeight: 700, letterSpacing: 1 }}>
                       <div>#</div>
-                      <div style={{ textAlign: 'center' }}>DURÉE</div>
-                      <div style={{ textAlign: 'center' }}>ALLURE</div>
+                      <div style={{ textAlign: 'center' }}>{t('col_duration')}</div>
+                      <div style={{ textAlign: 'center' }}>{t('col_pace')}</div>
                       <div style={{ textAlign: 'center' }}>WATT</div>
                       <div style={{ textAlign: 'center' }}>KCAL</div>
                       <div style={{ textAlign: 'center' }}>EFFORT</div>
@@ -1158,7 +1159,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                         <select value={bloc.effortType || 'EF'}
                           onChange={e => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs||[]).map((b, bj) => bj === bi ? { ...b, effortType: e.target.value } : b) }))}
                           style={{ background: C.inset, border: `1px solid ${C.orange}`, borderRadius: 5, padding: '7px 3px', fontSize: 10, fontWeight: 700, color: C.orange, width: '100%', outline: 'none' }}>
-                          {CARDIO_EFFORT_TYPES.map(t => <option key={t}>{t}</option>)}
+                          {CARDIO_EFFORT_TYPES.map(t => <option key={t} value={t}>{effortLabel(t)}</option>)}
                         </select>
                         <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: (x.blocs||[]).filter((_, bj) => bj !== bi) }))}
                           style={{ background: 'none', border: 'none', color: C.muted, fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
@@ -1166,11 +1167,11 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                     ))}
                     <button onClick={() => setLocal(prev => prev.map((x, xi) => xi !== ei ? x : { ...x, blocs: [...(x.blocs||[]), { duree: '', allure: '', watt: '', kcal: '', effortType: 'EF' }] }))}
                       style={{ width: '100%', background: 'none', border: `1px dashed ${C.border}`, borderRadius: 5, color: C.muted, fontSize: 11, fontWeight: 700, padding: '5px', cursor: 'pointer', marginTop: 4, marginBottom: 14, letterSpacing: 1 }}>
-                      + BLOC D'EFFORT
+                      {t('add_effort_block')}
                     </button>
                     {/* RPE + remarques */}
                     <div style={{ paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
+                      <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>{t('felt_rpe')}</div>
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
                         {[1,2,3,4,5,6,7,8,9,10].map(v => (
                           <button key={v} onClick={() => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, intensite: String(v) } : x))}
@@ -1182,7 +1183,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                       </div>
                       <textarea value={local?.[ei]?.remarques || ''}
                         onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
-                        placeholder="Remarques (sensations, conditions...)" rows={2}
+                        placeholder={t('ph_remarks_cardio')} rows={2}
                         style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text, resize: 'none', outline: 'none' }}/>
                     </div>
                   </div>
@@ -1210,7 +1211,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                   marginBottom: 6, fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
                   <div>#</div>
                   <div style={{ textAlign: 'center' }}>REPS</div>
-                  <div style={{ textAlign: 'center' }}>KG PRESCRIT</div>
+                  <div style={{ textAlign: 'center' }}>{t('col_kg_prescribed')}</div>
                 </div>
               ) : isAdded ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 24px', gap: 5,
@@ -1224,18 +1225,18 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                 <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 24px', gap: 5,
                   marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
                   <div>#</div>
-                  <div style={{ textAlign: 'center', color: C.yellow }}>RÉPÉTITIONS</div>
-                  <div style={{ textAlign: 'center', color: C.yellow }}>CHARGE (KG)</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>{t('col_repetitions')}</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>{t('f_load_kg')}</div>
                   <div/>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 1fr 1fr 1fr', gap: 5,
                   marginBottom: 6, fontSize: 8, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>
                   <div>#</div>
-                  <div style={{ textAlign: 'center' }}>REPS P.</div>
-                  <div style={{ textAlign: 'center' }}>KG P.</div>
-                  <div style={{ textAlign: 'center', color: C.yellow }}>REPS R.</div>
-                  <div style={{ textAlign: 'center', color: C.yellow }}>KG R.</div>
+                  <div style={{ textAlign: 'center' }}>{t('col_reps_p')}</div>
+                  <div style={{ textAlign: 'center' }}>{t('col_kg_p')}</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>{t('col_reps_r')}</div>
+                  <div style={{ textAlign: 'center', color: C.yellow }}>{t('col_kg_r')}</div>
                 </div>
               )}
 
@@ -1329,13 +1330,13 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                   style={{ width: '100%', background: 'none', border: `1px dashed ${C.orange}`,
                     borderRadius: 5, color: C.orange, fontSize: 11, fontWeight: 700,
                     padding: '5px', cursor: 'pointer', marginTop: 4, letterSpacing: 1 }}>
-                  + SÉRIE SUPPLÉMENTAIRE
+                  {t('add_extra_set')}
                 </button>
               )}
 
               {!readOnly && (
                 <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>RPE RESSENTI</div>
+                  <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1, marginBottom: 8, fontWeight: 700 }}>{t('felt_rpe')}</div>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
                     {[1,2,3,4,5,6,7,8,9,10].map(v => (
                       <button key={v}
@@ -1352,7 +1353,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
                   <textarea
                     value={local?.[ei]?.remarques || ''}
                     onChange={e => setLocal(prev => prev.map((x, xi) => xi === ei ? { ...x, remarques: e.target.value } : x))}
-                    placeholder="Remarques (douleurs, sensations...)"
+                    placeholder={t('ph_remarks_strength')}
                     rows={2}
                     style={{ width: '100%', background: C.inset, border: `1px solid ${C.border}`,
                       borderRadius: 6, padding: '8px 10px', fontSize: 12, color: C.text,
@@ -1386,15 +1387,15 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.green}`,
             borderRadius: 10, padding: '14px 16px', marginBottom: 14 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>
-              BILAN DE LA SÉANCE
+              {t('session_summary')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: C.purple, fontFamily: "'Barlow Condensed',sans-serif" }}>{nbExercices}</div>
-                <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>EXERCICES</div>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>{t('exercises_caps')}</div>
               </div>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: C.blue, fontFamily: "'Barlow Condensed',sans-serif" }}>{totalKg > 0 ? totalKg.toLocaleString('fr-FR') : '—'}</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: C.blue, fontFamily: "'Barlow Condensed',sans-serif" }}>{totalKg > 0 ? totalKg.toLocaleString(numLocale()) : '—'}</div>
                 <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>KG</div>
               </div>
               <div>
@@ -1403,7 +1404,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
               </div>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: C.red, fontFamily: "'Barlow Condensed',sans-serif" }}>{avgRpe}</div>
-                <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>RPE MOY.</div>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: .5 }}>{t('kpi_rpe')}</div>
               </div>
             </div>
           </div>
@@ -1415,7 +1416,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
           style={{ width: '100%', background: 'none', border: `1px dashed ${C.purple}`,
             borderRadius: 8, color: C.purple, fontSize: 12, fontWeight: 700,
             padding: '10px', cursor: 'pointer', marginBottom: 80, letterSpacing: 1 }}>
-          + AJOUTER UN EXERCICE
+          {t('add_an_exercise')}
         </button>
       )}
 
@@ -1433,15 +1434,15 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
             style={{ background: '#1C1C1C', borderRadius: 14, padding: 24, width: '100%', maxWidth: 340,
               border: `2px solid ${C.purple}` }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: C.purple, letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>
-              CHOISIR LA CATÉGORIE
+              {t('choose_category')}
             </div>
             {[
-              { cat: 'POUSSEE',   label: '🔵 POUSSÉE (Push)', bg: '#2F80ED', color: '#FFF' },
-              { cat: 'TIRAGE',    label: '🟢 TIRAGE (Pull)',  bg: '#27AE60', color: '#FFF' },
-              { cat: 'JAMBES',    label: '🟡 JAMBES (Legs)',  bg: '#F2C94C', color: '#1a1000' },
-              { cat: 'FULL BODY', label: '🟣 FULL BODY',      bg: '#9B51E0', color: '#FFF' },
-              { cat: 'CARDIO',    label: '🔴 CARDIO',         bg: '#E63946', color: '#FFF' },
-              { cat: 'AUTRES',    label: '⚫ AUTRES',          bg: '#4A4A4A', color: '#FFF' },
+              { cat: 'POUSSEE',   label: t('pick_push'), bg: '#2F80ED', color: '#FFF' },
+              { cat: 'TIRAGE',    label: t('pick_pull'),  bg: '#27AE60', color: '#FFF' },
+              { cat: 'JAMBES',    label: t('pick_legs'),  bg: '#F2C94C', color: '#1a1000' },
+              { cat: 'FULL BODY', label: t('pick_full'),      bg: '#9B51E0', color: '#FFF' },
+              { cat: 'CARDIO',    label: t('pick_cardio'),         bg: '#E63946', color: '#FFF' },
+              { cat: 'AUTRES',    label: t('pick_other'),          bg: '#4A4A4A', color: '#FFF' },
             ].map(({ cat, label, bg, color }) => (
               <button key={cat}
                 onClick={() => addExoToSeance(cat)}
@@ -1455,7 +1456,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
             <button onClick={() => setAddExoCatPicker(false)}
               style={{ width: '100%', background: 'none', border: '1px solid #333',
                 borderRadius: 8, color: '#888', fontSize: 12, cursor: 'pointer', padding: '10px', marginTop: 4 }}>
-              Annuler
+              {t('cancel')}
             </button>
           </div>
         </div>
@@ -1472,7 +1473,7 @@ function SeanceDetail({ seance, onBack, readOnly = false, isPrescritEdit = false
             fontSize: 22, color: '#fff',
             boxShadow: saving ? 'none' : '0 4px 16px rgba(39,174,96,.5)',
             transition: 'background .2s, box-shadow .2s' }}
-          title="Sauvegarder la séance">
+          title={t('save_session')}>
           {saving ? '⏳' : '✓'}
         </button>
       )}
@@ -1643,9 +1644,9 @@ function StatsView({ athlete, cahiers }) {
 
   // Top 3 PR par groupe musculaire principal
   const GROUP_KEYS = [
-    { k: 'JAMBES',  label: 'Jambes',  color: '#F2C94C', textColor: '#1a1000' },
-    { k: 'POUSSEE', label: 'Poussée', color: '#2F80ED', textColor: '#FFF' },
-    { k: 'TIRAGE',  label: 'Tirage',  color: '#27AE60', textColor: '#FFF' },
+    { k: 'JAMBES',  label: catLabel('JAMBES'),  color: '#F2C94C', textColor: '#1a1000' },
+    { k: 'POUSSEE', label: catLabel('POUSSEE'), color: '#2F80ED', textColor: '#FFF' },
+    { k: 'TIRAGE',  label: catLabel('TIRAGE'),  color: '#27AE60', textColor: '#FFF' },
   ]
   const prByGroup = GROUP_KEYS.map(g => {
     const top3 = prList.filter(pr => {
@@ -1658,9 +1659,9 @@ function StatsView({ athlete, cahiers }) {
   const currentExo = selExo && exoData[selExo] ? exoData[selExo] : null
 
   const TABS = [
-    { k: 'overview', label: 'VUE GLOBALE' },
-    { k: 'exercices', label: 'EXERCICES' },
-    { k: 'regularite', label: 'RÉGULARITÉ' },
+    { k: 'overview', label: t('stats_tab_overview') },
+    { k: 'exercices', label: t('exercises_caps') },
+    { k: 'regularite', label: t('stats_tab_regularity') },
   ]
 
   return (
@@ -1682,7 +1683,7 @@ function StatsView({ athlete, cahiers }) {
       {totalDone === 0 ? (
         <div style={{ background: C.card, borderRadius: 10, padding: '40px 20px', textAlign: 'center', border: `1px dashed ${C.border}` }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📈</div>
-          <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>Remplis ton cahier d'entraînement<br/><span style={{fontSize:12}}>pour voir tes statistiques ici.</span></div>
+          <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{t('stats_empty_1')}<br/><span style={{fontSize:12}}>{t('stats_empty_2')}</span></div>
         </div>
       ) : tab === 'overview' ? (
 
@@ -1693,10 +1694,10 @@ function StatsView({ athlete, cahiers }) {
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
             {[
-              { l: 'SÉANCES', v: totalDone, sub: `/ ${totalPrescribed} prévues`, c: C.green },
-              { l: 'TONNAGE TOTAL', v: totalVol >= 1000 ? `${Math.round(totalVol/1000)}k` : totalVol, sub: 'kg soulevés', c: C.blue },
-              { l: 'RPE MOYEN', v: avgRpe || '—', sub: 'intensité /10', c: avgRpe >= 8 ? C.red : avgRpe >= 6 ? C.yellow : C.green },
-              { l: 'EXERCICES', v: exoNames.length, sub: 'suivis', c: C.purple },
+              { l: t('kpi_sessions'), v: totalDone, sub: `/ ${totalPrescribed} ${t('stats_planned')}`, c: C.green },
+              { l: t('stats_total_volume'), v: totalVol >= 1000 ? `${Math.round(totalVol/1000)}k` : totalVol, sub: t('stats_kg_lifted'), c: C.blue },
+              { l: t('stats_avg_rpe'), v: avgRpe || '—', sub: t('stats_intensity_10'), c: avgRpe >= 8 ? C.red : avgRpe >= 6 ? C.yellow : C.green },
+              { l: t('exercises_caps'), v: exoNames.length, sub: t('stats_tracked'), c: C.purple },
             ].map(({ l, v, sub, c }) => (
               <div key={l} style={{ background: C.card, borderRadius: 10, padding: '14px', borderTop: `3px solid ${c}` }}>
                 <div style={{ fontSize: 26, fontWeight: 800, color: c, lineHeight: 1 }}>{v}</div>
@@ -1710,7 +1711,7 @@ function StatsView({ athlete, cahiers }) {
           {totalPrescribed > 0 && (
             <div style={{ background: C.card, borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>PROGRESSION DU PROGRAMME</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>{t('stats_program_progress')}</span>
                 <span style={{ fontSize: 11, fontWeight: 800, color: C.yellow }}>{Math.round((totalDone/totalPrescribed)*100)}%</span>
               </div>
               <div style={{ background: C.border, borderRadius: 4, height: 8, overflow: 'hidden' }}>
@@ -1723,8 +1724,8 @@ function StatsView({ athlete, cahiers }) {
           {/* Volume par semaine */}
           {weeklyData.filter(w=>w.vol>0).length > 1 && (
             <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>VOLUME HEBDOMADAIRE</div>
-              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>KG PAR SEMAINE</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{t('stats_weekly_volume')}</div>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>{t('stats_kg_per_week')}</div>
               <MiniChart data={weeklyData.filter(w=>w.vol>0)} color={C.blue} height={70} showLabels />
             </div>
           )}
@@ -1732,8 +1733,8 @@ function StatsView({ athlete, cahiers }) {
           {/* RPE par semaine */}
           {weeklyData.filter(w=>w.rpe).length > 1 && (
             <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>INTENSITÉ MOYENNE</div>
-              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>RPE MOYEN PAR SEMAINE</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{t('stats_avg_intensity')}</div>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>{t('stats_avg_rpe_per_week')}</div>
               <MiniChart data={weeklyData.filter(w=>w.rpe).map(w=>({...w, v:w.rpe}))} color={C.red} height={60} yMax={10} yMin={1} unit="rpe" showLabels />
             </div>
           )}
@@ -1741,18 +1742,18 @@ function StatsView({ athlete, cahiers }) {
           {/* Tonnage par groupe musculaire */}
           {Object.keys(catVol).length > 0 && (() => {
             const groups = [
-              { k: 'JAMBES',   label: 'Jambes',    color: '#F2C94C' },
-              { k: 'POUSSEE',  label: 'Poussée',   color: '#2F80ED' },
-              { k: 'TIRAGE',   label: 'Tirage',    color: '#27AE60' },
-              { k: 'FULL',     label: 'Full Body', color: '#9B51E0' },
-              { k: 'CARDIO',   label: 'Cardio',    color: '#E63946' },
-              { k: 'AUTRES',   label: 'Autres',    color: '#4A4A4A' },
+              { k: 'JAMBES',   label: catLabel('JAMBES'),    color: '#F2C94C' },
+              { k: 'POUSSEE',  label: catLabel('POUSSEE'),   color: '#2F80ED' },
+              { k: 'TIRAGE',   label: catLabel('TIRAGE'),    color: '#27AE60' },
+              { k: 'FULL',     label: catLabel('FULL BODY'), color: '#9B51E0' },
+              { k: 'CARDIO',   label: catLabel('CARDIO'),    color: '#E63946' },
+              { k: 'AUTRES',   label: catLabel('AUTRES'),    color: '#4A4A4A' },
             ].filter(g => catVol[g.k] > 0)
             const totalCat = groups.reduce((s,g) => s + (catVol[g.k]||0), 0)
             return (
               <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>TONNAGE PAR GROUPE MUSCULAIRE</div>
-                <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 14 }}>RÉPARTITION DU VOLUME TOTAL</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{t('stats_volume_by_group')}</div>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 14 }}>{t('stats_volume_split')}</div>
                 {/* Barre empilée */}
                 <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', height: 14, marginBottom: 14 }}>
                   {groups.map(g => (
@@ -1788,7 +1789,7 @@ function StatsView({ athlete, cahiers }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <div style={{ background: g.color, color: g.textColor, fontSize: 9, fontWeight: 800,
                   padding: '2px 8px', borderRadius: 3, letterSpacing: 1 }}>{g.label.toUpperCase()}</div>
-                <div style={{ fontSize: 10, fontWeight: 800, color: C.text }}>TOP CHARGES</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.text }}>{t('stats_top_loads')}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {g.top3.map((pr, i) => (
@@ -1822,12 +1823,12 @@ function StatsView({ athlete, cahiers }) {
         <>
           {/* Sélecteur exercice */}
           <div style={{ background: C.card, borderRadius: 8, padding: '12px 14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>CHOISIR UN EXERCICE</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>{t('stats_choose_exercise')}</div>
             <select value={selExo || ''} onChange={e => setSelExo(e.target.value || null)}
               style={{ width: '100%', background: C.inset, border: `1px solid ${C.yellow}`, borderRadius: 6,
                 padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#FFF', outline: 'none',
                 fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif" }}>
-              <option value="">— Sélectionner un exercice —</option>
+              <option value="">{t('stats_select_exercise')}</option>
               {exoNames.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
@@ -1836,7 +1837,7 @@ function StatsView({ athlete, cahiers }) {
             /* Liste résumée de tous les PR */
             <div style={{ background: C.card, borderRadius: 10, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
               <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: C.text }}>🏆 TOUS LES RECORDS</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.text }}>{t('stats_all_records')}</div>
               </div>
               {prList.map((pr, i) => {
                 const cc = CAT_COLORS[(pr.cat||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(' ')[0]] || CAT_COLORS['FULL BODY']
@@ -1844,7 +1845,7 @@ function StatsView({ athlete, cahiers }) {
                   <div key={pr.nom} onClick={() => setSelExo(pr.nom)}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
                       borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}>
-                    <div style={{ background: cc.bg, color: cc.text, fontSize: 7, fontWeight: 800, padding: '2px 5px', borderRadius: 3, flexShrink: 0 }}>{pr.cat||'—'}</div>
+                    <div style={{ background: cc.bg, color: cc.text, fontSize: 7, fontWeight: 800, padding: '2px 5px', borderRadius: 3, flexShrink: 0 }}>{catBadge(pr.cat)||'—'}</div>
                     <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pr.nom}</div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 800, color: C.yellow }}>
@@ -1872,18 +1873,18 @@ function StatsView({ athlete, cahiers }) {
                       <div style={{ background: C.card, borderRadius: 10, padding: '12px', borderTop: `3px solid ${C.yellow}` }}>
                         <div style={{ fontSize: 22, fontWeight: 800, color: C.yellow }}>{bestKg}<span style={{fontSize:10}}> kg</span></div>
                         {bestReps && <div style={{ fontSize: 9, color: C.muted }}>× {bestReps} reps</div>}
-                        <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>MEILLEURE CHARGE</div>
+                        <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>{t('stats_best_load')}</div>
                       </div>
                       {last.rpe && (
                         <div style={{ background: C.card, borderRadius: 10, padding: '12px', borderTop: `3px solid ${last.rpe>=8?C.red:last.rpe>=6?C.yellow:C.green}` }}>
                           <div style={{ fontSize: 22, fontWeight: 800, color: last.rpe>=8?C.red:last.rpe>=6?C.yellow:C.green }}>{last.rpe}</div>
-                          <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>DERNIER RPE</div>
+                          <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>{t('stats_last_rpe')}</div>
                         </div>
                       )}
                       {volDiff !== null && (
                         <div style={{ background: C.card, borderRadius: 10, padding: '12px', borderTop: `3px solid ${volDiff>=0?C.green:C.red}` }}>
                           <div style={{ fontSize: 22, fontWeight: 800, color: volDiff>=0?C.green:C.red }}>{volDiff>=0?'+':''}{volDiff}%</div>
-                          <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>ÉVOLUTION VOL.</div>
+                          <div style={{ fontSize: 8, color: C.muted, letterSpacing: 1, marginTop: 4 }}>{t('stats_vol_change')}</div>
                         </div>
                       )}
                     </div>
@@ -1892,7 +1893,7 @@ function StatsView({ athlete, cahiers }) {
                     {currentExo.length > 1 && (
                       <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
                         <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{selExo}</div>
-                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>VOLUME PAR SÉANCE (kg)</div>
+                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>{t('stats_volume_per_session_kg')}</div>
                         <MiniChart data={currentExo} color={C.blue} height={70} showLabels />
                       </div>
                     )}
@@ -1900,8 +1901,8 @@ function StatsView({ athlete, cahiers }) {
                     {/* Courbe charge max exo */}
                     {currentExo.filter(d=>d.kg>0).length > 1 && (
                       <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
-                        <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>CHARGE MAXIMALE</div>
-                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>KG PAR SÉANCE</div>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{t('stats_max_load')}</div>
+                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>{t('stats_kg_per_session')}</div>
                         <MiniChart data={currentExo.filter(d=>d.kg>0).map(d=>({...d,v:d.kg}))} color={C.yellow} height={60} showLabels />
                       </div>
                     )}
@@ -1909,8 +1910,8 @@ function StatsView({ athlete, cahiers }) {
                     {/* Courbe RPE exo */}
                     {currentExo.filter(d=>d.rpe).length > 1 && (
                       <div style={{ background: C.card, borderRadius: 10, padding: '14px', border: `1px solid ${C.border}` }}>
-                        <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>INTENSITÉ RESSENTIE</div>
-                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>RPE PAR SÉANCE</div>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{t('stats_felt_intensity')}</div>
+                        <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>{t('stats_rpe_per_session')}</div>
                         <MiniChart data={currentExo.filter(d=>d.rpe).map(d=>({...d,v:d.rpe}))} color={C.red} height={60} yMax={10} yMin={1} unit="rpe" showLabels />
                       </div>
                     )}
@@ -1921,7 +1922,7 @@ function StatsView({ athlete, cahiers }) {
               <button onClick={() => setSelExo(null)}
                 style={{ width: '100%', background: 'none', border: `1px solid ${C.border}`, borderRadius: 8,
                   color: C.muted, fontSize: 11, padding: '10px', cursor: 'pointer', marginTop: 12 }}>
-                ← Tous les exercices
+                {t('stats_all_exercises_back')}
               </button>
             </>
           ) : null}
@@ -1935,16 +1936,16 @@ function StatsView({ athlete, cahiers }) {
         <>
           {/* Séances par semaine */}
           <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>SÉANCES PAR SEMAINE</div>
-            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>RÉGULARITÉ D'ENTRAÎNEMENT</div>
+            <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{t('stats_sessions_per_week')}</div>
+            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>{t('stats_training_regularity')}</div>
             <MiniChart data={Object.values(weekMap).map(w=>({lbl:w.lbl, v:w.count}))} color={C.green} height={70} showLabels />
           </div>
 
           {/* Volume par séance individuelle */}
           {seancesList.length > 1 && (
             <div style={{ background: C.card, borderRadius: 10, padding: '14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>VOLUME PAR SÉANCE</div>
-              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>KG SOULEVÉS (toutes séances)</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{t('stats_volume_per_session')}</div>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>{t('stats_kg_all_sessions')}</div>
               <MiniChart data={seancesList.filter(s=>s.vol>0)} color={C.blue} height={70} showLabels />
             </div>
           )}
@@ -1952,8 +1953,8 @@ function StatsView({ athlete, cahiers }) {
           {/* RPE par séance individuelle */}
           {seancesList.filter(s=>s.rpe).length > 1 && (
             <div style={{ background: C.card, borderRadius: 10, padding: '14px', border: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>INTENSITÉ PAR SÉANCE</div>
-              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>RPE RESSENTI</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text, marginBottom: 2 }}>{t('stats_intensity_per_session')}</div>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>{t('felt_rpe')}</div>
               <MiniChart data={seancesList.filter(s=>s.rpe).map(s=>({...s,v:s.rpe}))} color={C.red} height={70} yMax={10} yMin={1} unit="rpe" showLabels />
             </div>
           )}
@@ -1999,21 +2000,21 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
     setSaving(true)
     await saveNutri(key, form)
     setSaving(false)
-    notify('✓ Nutrition sauvegardée !', C.green)
+    notify(t('nutri_saved'), C.green)
   }
 
   const macros = [
-    { label: 'GLUCIDES', key: 'glucides', color: C.yellow, kcalPer: 4, unit: 'g' },
-    { label: 'LIPIDES',  key: 'lipides',  color: C.orange, kcalPer: 9, unit: 'g' },
-    { label: 'PROTÉINES',key: 'proteines',color: C.blue,   kcalPer: 4, unit: 'g' },
+    { label: t('macro_carbs'), key: 'glucides', color: C.yellow, kcalPer: 4, unit: 'g' },
+    { label: t('macro_fat'),  key: 'lipides',  color: C.orange, kcalPer: 9, unit: 'g' },
+    { label: t('macro_protein'),key: 'proteines',color: C.blue,   kcalPer: 4, unit: 'g' },
   ]
 
-  const dateLabel = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+  const dateLabel = new Date().toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })
 
   return (
     <div className="fade-in" style={{ padding: '16px 14px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 4 }}>
-        NUTRITION & SANTÉ
+        {t('nutri_title')}
       </div>
       <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, textTransform: 'capitalize' }}>{dateLabel}</div>
 
@@ -2021,7 +2022,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
       <div style={{ background: C.card, borderRadius: 10, padding: '16px', marginBottom: 16,
         border: `1px solid ${C.border}`, textAlign: 'center', borderTop: `3px solid ${C.red}` }}>
         <div style={{ fontSize: 42, fontWeight: 900, color: C.red }}>{kcal}</div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2 }}>KCAL TOTALES</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2 }}>{t('kcal_total')}</div>
         {kcal > 0 && (
           <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 8 }}>
             {macros.map(m => {
@@ -2054,7 +2055,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
                 color: m.color, textAlign: 'center', outline: 'none' }}
             />
             <div style={{ fontSize: 9, color: C.muted, textAlign: 'center', marginTop: 4 }}>
-              grammes · {(parseFloat(form[m.key]) || 0) * m.kcalPer} kcal
+              {t('grams')} · {(parseFloat(form[m.key]) || 0) * m.kcalPer} kcal
             </div>
           </div>
         ))}
@@ -2065,7 +2066,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
         <div style={{ background: C.card, borderRadius: 8, padding: '12px 14px', marginBottom: 16,
           border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>
-            RÉPARTITION MACROS
+            {t('macro_split')}
           </div>
           <div style={{ display: 'flex', borderRadius: 4, overflow: 'hidden', height: 10 }}>
             {macros.map(m => {
@@ -2092,7 +2093,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
       <div style={{ background: C.card, borderRadius: 10, padding: '14px 16px', marginBottom: 16,
         border: `1px solid ${C.border}` }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>
-          FATIGUE JOURNALIÈRE (1 = reposé · 10 = épuisé)
+          {t('fatigue_title')}
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[1,2,3,4,5,6,7,8,9,10].map(v => (
@@ -2109,7 +2110,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
         </div>
         {form.fatigue && (
           <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>
-            Fatigue saisie :
+            {t('fatigue_entered')}
             <span style={{ marginLeft: 5, fontWeight: 800,
               color: parseInt(form.fatigue) >= 8 ? C.red : parseInt(form.fatigue) >= 5 ? C.yellow : C.green }}>
               {form.fatigue}/10
@@ -2121,12 +2122,12 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
       {/* Notes */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 6 }}>
-          NOTES DU JOUR
+          {t('notes_today')}
         </div>
         <textarea
           value={form.notes}
           onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-          placeholder="Sommeil, énergie, digestion, humeur..."
+          placeholder={t('ph_notes')}
           rows={3}
           style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`,
             borderRadius: 8, padding: '10px 12px', fontSize: 13, color: C.text,
@@ -2138,7 +2139,7 @@ function NutritionView({ athleteId, nutri, saveNutri, notify }) {
         style={{ width: '100%', background: saving ? C.muted : C.green, color: C.white,
           border: 'none', borderRadius: 10, padding: '14px', fontSize: 14, fontWeight: 800,
           cursor: saving ? 'default' : 'pointer', letterSpacing: 1 }}>
-        {saving ? '⏳ SAUVEGARDE...' : '✓ SAUVEGARDER'}
+        {saving ? t('saving_caps') : t('save_caps')}
       </button>
 
       {/* Historique nutrition */}
@@ -2158,7 +2159,7 @@ function NutritionHistory({ nutri }) {
       const date = key.split('-').slice(-3).join('-') // extract YYYY-MM-DD
       return {
         date,
-        label: new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+        label: new Date(date + 'T12:00:00').toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' }),
         kcal: Math.round((parseFloat(d.glucides)||0)*4 + (parseFloat(d.lipides)||0)*9 + (parseFloat(d.proteines)||0)*4),
         glucides: parseFloat(d.glucides) || 0,
         lipides: parseFloat(d.lipides) || 0,
@@ -2175,7 +2176,7 @@ function NutritionHistory({ nutri }) {
       border: `1px dashed ${C.border}`, textAlign: 'center' }}>
       <div style={{ fontSize: 28, marginBottom: 8 }}>📈</div>
       <div style={{ fontSize: 12, color: C.muted }}>
-        Sauvegarde au moins 2 jours pour voir l'évolution
+        {t('nutri_need_2days')}
       </div>
     </div>
   )
@@ -2184,7 +2185,7 @@ function NutritionHistory({ nutri }) {
     <div style={{ marginTop: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2 }}>
-          ÉVOLUTION — {days} DERNIERS JOURS
+          {tf('nutri_evolution_title', { days })}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {[7, 14].map(d => (
@@ -2192,7 +2193,7 @@ function NutritionHistory({ nutri }) {
               style={{ background: days === d ? C.yellow : C.card, color: days === d ? C.navy : C.muted,
                 border: `1px solid ${days === d ? C.yellow : C.border}`,
                 borderRadius: 4, padding: '3px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}>
-              {d}J
+              {d}{t('day_letter')}
             </button>
           ))}
         </div>
@@ -2209,9 +2210,9 @@ function NutritionHistory({ nutri }) {
         </div>
         <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
           {[
-            { f: 'glucides', label: 'GLUC', color: C.yellow },
-            { f: 'lipides',  label: 'LIP',  color: C.orange },
-            { f: 'proteines',label: 'PROT', color: C.blue },
+            { f: 'glucides', label: t('macro_carbs_short'), color: C.yellow },
+            { f: 'lipides',  label: t('macro_fat_short'),  color: C.orange },
+            { f: 'proteines',label: t('macro_protein_short'), color: C.blue },
           ].map(m => (
             <div key={m.f} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <div style={{ width: 8, height: 8, borderRadius: 2, background: m.color }} />
@@ -2369,7 +2370,7 @@ function PersonalRecords({ athlete, cahiers }) {
   return (
     <div style={{ marginTop: 20, marginBottom: 4 }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 10 }}>
-        🏆 RECORDS PERSONNELS — CHARGE MAX
+        {t('records_title')}
       </div>
       <div style={{ background: C.card, borderRadius: 10, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
         {prList.map(([nom, pr], i) => {
@@ -2383,7 +2384,7 @@ function PersonalRecords({ athlete, cahiers }) {
               </div>
               <div style={{ background: cc.bg, color: cc.text, fontSize: 8, fontWeight: 800,
                 padding: '2px 7px', borderRadius: 3, letterSpacing: 1, flexShrink: 0 }}>
-                {pr.cat || '—'}
+                {catBadge(pr.cat) || '—'}
               </div>
               <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: C.text,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nom}</div>
@@ -2425,7 +2426,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
       updated.poidsHistory = history
     }
     await saveAthlete(updated)
-    notify('✓ Profil mis à jour', '#27AE60')
+    notify(t('profile_updated'), '#27AE60')
     setEditing(false)
   }
 
@@ -2448,25 +2449,25 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
             {athlete.prenom} {athlete.nom}
           </div>
           <div style={{ fontSize: 12, color: C.yellow, fontWeight: 700, marginTop: 2 }}>
-            {athlete.objectif || 'Objectif non défini'}
+            {athlete.objectif || t('profile_goal_unset')}
           </div>
           {athlete.sport && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{athlete.sport}</div>}
         </div>
         <button onClick={() => setEditing(e => !e)}
           style={{ marginLeft: 'auto', background: editing ? C.border : 'rgba(242,196,76,.1)', border: '1px solid rgba(242,196,76,.3)', borderRadius: 6, color: '#F2C94C', fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: '6px 12px', cursor: 'pointer', flexShrink: 0 }}>
-          {editing ? '✕ Annuler' : '✏ Modifier'}
+          {editing ? t('profile_cancel') : t('profile_edit')}
         </button>
       </div>
 
       {/* Formulaire édition solo */}
       {editing && (
         <div className="fade-in" style={{ background: C.panel, borderRadius: 12, padding: '18px 16px', border: '1px solid rgba(242,196,76,.2)', marginBottom: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#F2C94C', letterSpacing: 2, marginBottom: 14 }}>MODIFIER LE PROFIL</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#F2C94C', letterSpacing: 2, marginBottom: 14 }}>{t('profile_edit_title')}</div>
           {[
-            { k: 'prenom', l: 'PRÉNOM', ph: 'Prénom' },
-            { k: 'nom', l: 'NOM', ph: 'Nom' },
-            { k: 'objectif', l: 'OBJECTIF', ph: 'Prise de masse, force...' },
-            { k: 'sport', l: 'SPORT', ph: 'Musculation, CrossFit...' },
+            { k: 'prenom', l: t('f_firstname'), ph: t('ph_firstname') },
+            { k: 'nom', l: t('f_lastname'), ph: t('ph_lastname') },
+            { k: 'objectif', l: t('f_goal'), ph: t('ph_goal') },
+            { k: 'sport', l: t('f_sport'), ph: t('ph_sport') },
           ].map(({ k, l, ph }) => (
             <div key={k} style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>{l}</div>
@@ -2476,35 +2477,35 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
           ))}
           <div style={{ display: 'flex', gap: 10, marginTop: 4, marginBottom: 12 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>TAILLE (cm)</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>{t('f_height')}</div>
               <input type="number" value={form.taille} onChange={e => setF('taille', e.target.value)}
                 style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>POIDS (kg)</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>{t('f_weight')}</div>
               <input type="number" value={form.poids} onChange={e => setF('poids', e.target.value)}
                 style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>ÂGE</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>{t('f_age')}</div>
               <input type="number" value={form.age} onChange={e => setF('age', e.target.value)}
                 style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>SEXE</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, marginBottom: 4 }}>{t('f_sex')}</div>
               <select value={form.sexe} onChange={e => setF('sexe', e.target.value)}
                 style={{ width: '100%', background: C.inset, border: '1px solid #333', borderRadius: 6, padding: '10px 12px', color: '#fff', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}>
                 <option value="">—</option>
-                <option value="H">H</option>
+                <option value="H">{t('sex_h')}</option>
                 <option value="F">F</option>
               </select>
             </div>
           </div>
           <button onClick={handleSaveProfil}
             style={{ width: '100%', marginTop: 14, background: '#F2C94C', color: '#1a1000', border: 'none', borderRadius: 8, padding: '13px', fontSize: 13, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer' }}>
-            Sauvegarder →
+            {t('profile_save')}
           </button>
         </div>
       )}
@@ -2512,11 +2513,11 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
         {[
-          { l: 'TAILLE', v: athlete.taille ? `${athlete.taille} cm` : '—' },
-          { l: 'POIDS',  v: athlete.poids  ? `${athlete.poids} kg`  : '—' },
-          { l: 'ÂGE',    v: athlete.age ? `${athlete.age} ans` : '—' },
-          { l: 'SEXE',   v: athlete.sexe || '—' },
-          { l: 'BLOCS',  v: athlete.blocs?.length || 0 },
+          { l: t('info_height'), v: athlete.taille ? `${athlete.taille} cm` : '—' },
+          { l: t('info_weight'), v: athlete.poids  ? `${athlete.poids} kg`  : '—' },
+          { l: t('info_age'), v: athlete.age ? `${athlete.age} ${t('age_unit')}` : '—' },
+          { l: t('info_sex'), v: athlete.sexe ? sexLabel(athlete.sexe) : '—' },
+          { l: t('info_blocks'), v: athlete.blocs?.length || 0 },
         ].map(({ l, v }) => (
           <div key={l} style={{ background: C.card, borderRadius: 8, padding: '12px 14px', border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 4 }}>{l}</div>
@@ -2528,12 +2529,12 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
       {/* Programme summary */}
       <div style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
         border: `1px solid ${C.border}`, marginBottom: 16 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 12 }}>PROGRAMME</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 12 }}>{t('program_title')}</div>
         <div style={{ display: 'flex', justifyContent: 'space-around' }}>
           {[
-            { l: 'Blocs', v: athlete.blocs?.length || 0, c: C.yellow },
-            { l: 'Semaines', v: totalSem, c: C.blue },
-            { l: 'Séances', v: totalSea, c: C.green },
+            { l: t('blocks'), v: athlete.blocs?.length || 0, c: C.yellow },
+            { l: t('weeks'), v: totalSem, c: C.blue },
+            { l: t('sessions'), v: totalSea, c: C.green },
           ].map(({ l, v, c }) => (
             <div key={l} style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 26, fontWeight: 800, color: c }}>{v}</div>
@@ -2547,7 +2548,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
         <div style={{ background: C.card, borderRadius: 10, padding: '14px 16px',
           border: `1px solid ${C.border}`, marginBottom: 4 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 8 }}>
-            NOTES DU COACH
+            {t('coach_notes')}
           </div>
           <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{athlete.notes}</div>
         </div>
@@ -2586,9 +2587,9 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
         const volFmt = totalVol >= 1000000 ? `${Math.round(totalVol/1000000)}M` : totalVol >= 1000 ? `${Math.round(totalVol/1000)}k` : Math.round(totalVol)
 
         const GROUP_KEYS_P = [
-          { k: 'JAMBES',  label: 'Jambes',  color: '#F2C94C', textColor: '#1a1000' },
-          { k: 'POUSSEE', label: 'Poussée', color: '#2F80ED', textColor: '#FFF' },
-          { k: 'TIRAGE',  label: 'Tirage',  color: '#27AE60', textColor: '#FFF' },
+          { k: 'JAMBES',  label: catLabel('JAMBES'),  color: '#F2C94C', textColor: '#1a1000' },
+          { k: 'POUSSEE', label: catLabel('POUSSEE'), color: '#2F80ED', textColor: '#FFF' },
+          { k: 'TIRAGE',  label: catLabel('TIRAGE'),  color: '#27AE60', textColor: '#FFF' },
         ]
         const allPrs = Object.values(prMapLocal).sort((a,b) => b.kg - a.kg)
         const prByGroupP = GROUP_KEYS_P.map(g => {
@@ -2603,13 +2604,13 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
 
         return (
           <div style={{ background: C.card, borderRadius: 12, padding: '16px', border: `1px solid ${C.border}`, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 14 }}>MES STATS</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, marginBottom: 14 }}>{t('my_stats')}</div>
             {/* KPIs */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
               {[
-                { l: 'SÉANCES', v: totalDone, c: C.green },
-                { l: 'TONNAGE', v: volFmt + ' kg', c: C.blue },
-                { l: 'RPE MOY.', v: avgRpe || '—', c: avgRpe >= 8 ? C.red : C.yellow },
+                { l: t('kpi_sessions'), v: totalDone, c: C.green },
+                { l: t('kpi_volume'), v: volFmt + ' kg', c: C.blue },
+                { l: t('kpi_rpe'), v: avgRpe || '—', c: avgRpe >= 8 ? C.red : C.yellow },
               ].map(({ l, v, c }) => (
                 <div key={l} style={{ background: C.bg, borderRadius: 8, padding: '10px 12px', borderTop: `3px solid ${c}` }}>
                   <div style={{ fontSize: 20, fontWeight: 800, color: c, lineHeight: 1 }}>{v}</div>
@@ -2620,7 +2621,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
             {/* Meilleures charges — tableau 3 colonnes */}
             {prByGroupP.length > 0 && (
               <>
-                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>MEILLEURES CHARGES</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>{t('best_lifts')}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: `repeat(${prByGroupP.length},1fr)`, gap: 8 }}>
                   {prByGroupP.map(g => {
                     const oneRM = g.pr.reps > 1 ? Math.round(g.pr.kg * (1 + g.pr.reps / 30)) : g.pr.kg
@@ -2660,7 +2661,7 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
               return (
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>ÉVOLUTION DU POIDS</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1 }}>{t('weight_evo')}</div>
                     <div style={{ fontSize: 12, fontWeight: 800, color: diff > 0 ? C.orange : diff < 0 ? C.green : C.muted }}>
                       {diff > 0 ? '+' : ''}{diff} kg
                     </div>
@@ -2702,11 +2703,11 @@ function ProfilView({ athlete, cahiers, isSolo, saveAthlete, notify, lang, setLa
       <div style={{ marginTop: 20, background: '#0a1020', borderRadius: 10, padding: '14px 16px',
         border: `1px solid ${C.blue}` }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: C.blue, letterSpacing: 2, marginBottom: 6 }}>
-          📲 INSTALLER L'APPLICATION
+          {t('install_title')}
         </div>
         <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-          <strong style={{ color: C.text }}>iPhone/iPad</strong> — Safari → Partager → "Sur l'écran d'accueil"<br />
-          <strong style={{ color: C.text }}>Android</strong> — Chrome → Menu → "Ajouter à l'écran d'accueil"
+          <strong style={{ color: C.text }}>iPhone/iPad</strong> — {t('install_ios')}<br />
+          <strong style={{ color: C.text }}>Android</strong> — {t('install_android')}
         </div>
       </div>
     </div>
@@ -2844,7 +2845,7 @@ const CguLabel = (
   </>
 )
 
-function SignupScreen({ athleteId, onDone }) {
+function SignupScreen({ athleteId, onDone, lang, setLang }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [saving, setSaving] = useState(false)
@@ -2863,11 +2864,11 @@ function SignupScreen({ athleteId, onDone }) {
 
   function mapError(code) {
     const messages = {
-      'auth/invalid-email': 'Email invalide.',
-      'auth/email-already-in-use': 'Un compte existe déjà avec cet email.',
-      'auth/weak-password': 'Mot de passe trop court (6 caractères minimum).',
+      'auth/invalid-email': t('auth_invalid_email'),
+      'auth/email-already-in-use': t('auth_email_in_use'),
+      'auth/weak-password': t('auth_weak_password'),
     }
-    return messages[code] || 'Une erreur est survenue, réessaie.'
+    return messages[code] || t('auth_generic')
   }
 
   async function handleCreate() {
@@ -2885,7 +2886,7 @@ function SignupScreen({ athleteId, onDone }) {
   }
 
   async function handleResetPassword() {
-    if (!email.trim()) { setErrorMsg('Entre ton email pour recevoir le lien.'); return }
+    if (!email.trim()) { setErrorMsg(t('login_need_email')); return }
     try {
       await sendPasswordResetEmail(auth, email.trim())
       setResetSent(true)
@@ -2899,31 +2900,31 @@ function SignupScreen({ athleteId, onDone }) {
       <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 24, width: 'auto' }} />
         <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
+        <div style={{ marginLeft: 'auto' }}><LangToggle lang={lang} setLang={setLang} fixed /></div>
       </div>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }} className="fade-in">
         <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
-          Crée ton accès
+          {t('signup_title')}
         </div>
         <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
-          Choisis un email et un mot de passe. Ton programme, tes séances et ton historique
-          seront directement disponibles, rien n'est perdu.
+          {t('signup_intro')}
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={labelStyle}>EMAIL</label>
-          <input style={inputStyle} type="email" placeholder="ton@email.com" value={email}
+          <label style={labelStyle}>{t('login_email')}</label>
+          <input style={inputStyle} type="email" placeholder={t('login_email_ph')} value={email}
             onChange={e => setEmail(e.target.value)} />
         </div>
 
         <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>MOT DE PASSE</label>
-          <input style={inputStyle} type="password" placeholder="6 caractères minimum" value={password}
+          <label style={labelStyle}>{t('login_password')}</label>
+          <input style={inputStyle} type="password" placeholder={t('password_min_ph')} value={password}
             onChange={e => setPassword(e.target.value)} />
         </div>
 
         {errorMsg && <div style={{ color: '#E63946', fontSize: 13, marginTop: 10 }}>{errorMsg}</div>}
-        {resetSent && <div style={{ color: '#1E8C45', fontSize: 13, marginTop: 10 }}>Email de réinitialisation envoyé.</div>}
+        {resetSent && <div style={{ color: '#1E8C45', fontSize: 13, marginTop: 10 }}>{t('login_reset_sent')}</div>}
 
         <ConsentBox checked={cgu} onChange={setCgu}>{CguLabel}</ConsentBox>
 
@@ -2937,13 +2938,13 @@ function SignupScreen({ athleteId, onDone }) {
           }}
           onMouseEnter={e => !saving && cgu && (e.currentTarget.style.background = '#E63946')}
           onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
-          {saving ? 'Création...' : 'Créer mon compte'}
+          {saving ? t('creating') : t('create_account')}
         </button>
 
         <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#AAA' }}>
-          Déjà un compte ?{' '}
+          {t('signup_already')}{' '}
           <span onClick={handleResetPassword} style={{ color: '#888', textDecoration: 'underline', cursor: 'pointer' }}>
-            Mot de passe oublié
+            {t('login_forgot')}
           </span>
         </div>
       </div>
@@ -2952,7 +2953,7 @@ function SignupScreen({ athleteId, onDone }) {
   )
 }
 
-function SoloSetupScreen({ onCreate }) {
+function SoloSetupScreen({ onCreate, lang, setLang }) {
   const [form, setForm] = useState({ prenom: '', nom: '', objectif: '', sport: '', taille: '', poids: '', sexe: '', email: '', password: '', cgu: false, consentPhysique: false })
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
@@ -2964,11 +2965,11 @@ function SoloSetupScreen({ onCreate }) {
 
   function mapSoloError(code) {
     const messages = {
-      'auth/email-already-in-use': 'Un compte existe déjà avec cet email — connecte-toi plutôt depuis l\'écran de connexion.',
-      'auth/invalid-email': 'Email invalide.',
-      'auth/weak-password': 'Mot de passe trop court (6 caractères minimum).',
+      'auth/email-already-in-use': t('auth_email_in_use_solo'),
+      'auth/invalid-email': t('auth_invalid_email'),
+      'auth/weak-password': t('auth_weak_password'),
     }
-    return messages[code] || 'Une erreur est survenue, réessaie.'
+    return messages[code] || t('auth_generic')
   }
 
   async function handleCreate() {
@@ -3009,6 +3010,7 @@ function SoloSetupScreen({ onCreate }) {
       <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <img src="/icon_avid_A.svg" alt="AVID" style={{ height: 24, width: 'auto' }} />
         <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 2, fontFamily: "'Barlow Condensed',sans-serif" }}>AVID PERFORMANCE LAB</div>
+        <div style={{ marginLeft: 'auto' }}><LangToggle lang={lang} setLang={setLang} fixed /></div>
       </div>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#FFFFFF', borderRadius: 10, width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(0,0,0,.35)', padding: '32px 28px', boxSizing: 'border-box' }}>
@@ -3022,34 +3024,34 @@ function SoloSetupScreen({ onCreate }) {
         {step === 1 && (
           <div className="fade-in">
             <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
-              Crée ton profil
+              {t('solo_title1')}
             </div>
             <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
-              Ces infos sont stockées dans ton app. Personne d'autre n'y a accès.
+              {t('solo_intro1')}
             </div>
 
             <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>PRÉNOM *</label>
-                <input style={inputStyle} placeholder="Ton prénom" value={form.prenom}
+                <label style={labelStyle}>{t('f_firstname_req')}</label>
+                <input style={inputStyle} placeholder={t('ph_your_firstname')} value={form.prenom}
                   onChange={e => set('prenom', e.target.value)} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>NOM</label>
-                <input style={inputStyle} placeholder="Ton nom" value={form.nom}
+                <label style={labelStyle}>{t('f_lastname')}</label>
+                <input style={inputStyle} placeholder={t('ph_your_lastname')} value={form.nom}
                   onChange={e => set('nom', e.target.value)} />
               </div>
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>OBJECTIF PRINCIPAL</label>
-              <input style={inputStyle} placeholder="Ex: Prise de masse, force, endurance..." value={form.objectif}
+              <label style={labelStyle}>{t('f_goal_main')}</label>
+              <input style={inputStyle} placeholder={t('ph_goal_long')} value={form.objectif}
                 onChange={e => set('objectif', e.target.value)} />
             </div>
 
             <div style={{ marginBottom: 20 }}>
-              <label style={labelStyle}>SPORT / DISCIPLINE</label>
-              <input style={inputStyle} placeholder="Ex: Musculation, CrossFit, Course..." value={form.sport}
+              <label style={labelStyle}>{t('f_sport_long')}</label>
+              <input style={inputStyle} placeholder={t('ph_sport_long')} value={form.sport}
                 onChange={e => set('sport', e.target.value)} />
             </div>
 
@@ -3059,7 +3061,7 @@ function SoloSetupScreen({ onCreate }) {
               style={btnPrimary(!!form.prenom.trim())}
               onMouseEnter={e => form.prenom.trim() && (e.currentTarget.style.background = '#E63946')}
               onMouseLeave={e => form.prenom.trim() && (e.currentTarget.style.background = '#12151C')}>
-              Suivant →
+              {t('next')}
             </button>
           </div>
         )}
@@ -3067,27 +3069,27 @@ function SoloSetupScreen({ onCreate }) {
         {step === 2 && (
           <div className="fade-in">
             <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
-              Infos physiques
+              {t('physical_title')}
             </div>
             <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
-              Optionnel — utile pour le suivi de ta progression.
+              {t('physical_intro')}
             </div>
 
             <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>TAILLE (cm)</label>
+                <label style={labelStyle}>{t('f_height')}</label>
                 <input style={inputStyle} type="number" placeholder="178" value={form.taille}
                   onChange={e => set('taille', e.target.value)} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>POIDS (kg)</label>
+                <label style={labelStyle}>{t('f_weight')}</label>
                 <input style={inputStyle} type="number" placeholder="80" value={form.poids}
                   onChange={e => set('poids', e.target.value)} />
               </div>
             </div>
 
             <div style={{ marginBottom: 22 }}>
-              <label style={labelStyle}>SEXE</label>
+              <label style={labelStyle}>{t('f_sex')}</label>
               <div style={{ display: 'flex', gap: 10 }}>
                 {['Homme', 'Femme', 'Autre'].map(s => (
                   <button key={s} onClick={() => set('sexe', s)}
@@ -3097,7 +3099,7 @@ function SoloSetupScreen({ onCreate }) {
                       color: form.sexe === s ? '#E63946' : '#888',
                       fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all .2s',
                       fontFamily: "'Barlow',sans-serif" }}>
-                    {s}
+                    {sexLabel(s)}
                   </button>
                 ))}
               </div>
@@ -3112,11 +3114,11 @@ function SoloSetupScreen({ onCreate }) {
             )}
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setStep(1)} style={btnSecondary}>← Retour</button>
+              <button onClick={() => setStep(1)} style={btnSecondary}>{t('back')}</button>
               <button onClick={() => step2Ok && setStep(3)} disabled={!step2Ok} style={{ ...btnPrimary(step2Ok), flex: 2 }}
                 onMouseEnter={e => step2Ok && (e.currentTarget.style.background = '#E63946')}
                 onMouseLeave={e => step2Ok && (e.currentTarget.style.background = '#12151C')}>
-                Suivant →
+                {t('next')}
               </button>
             </div>
           </div>
@@ -3125,30 +3127,30 @@ function SoloSetupScreen({ onCreate }) {
         {step === 3 && (
           <div className="fade-in">
             <div style={{ fontSize: 22, fontWeight: 900, color: '#1A1A1A', letterSpacing: .5, marginBottom: 6, textTransform: 'uppercase', fontFamily: "'Barlow Condensed',sans-serif" }}>
-              Crée ton accès
+              {t('signup_title')}
             </div>
             <div style={{ fontSize: 13, color: '#888', marginBottom: 26, lineHeight: 1.6 }}>
-              Un email et un mot de passe pour retrouver ton profil sur n'importe quel appareil.
+              {t('solo_intro3')}
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>EMAIL</label>
-              <input style={inputStyle} type="email" placeholder="ton@email.com" value={form.email}
+              <label style={labelStyle}>{t('login_email')}</label>
+              <input style={inputStyle} type="email" placeholder={t('login_email_ph')} value={form.email}
                 onChange={e => set('email', e.target.value)} />
             </div>
 
             <div style={{ marginBottom: 8 }}>
-              <label style={labelStyle}>MOT DE PASSE</label>
-              <input style={inputStyle} type="password" placeholder="6 caractères minimum" value={form.password}
+              <label style={labelStyle}>{t('login_password')}</label>
+              <input style={inputStyle} type="password" placeholder={t('password_min_ph')} value={form.password}
                 onChange={e => set('password', e.target.value)} />
             </div>
 
             {errorMsg && (
               <div style={{ marginTop: 10 }}>
                 <div style={{ color: '#E63946', fontSize: 13 }}>{errorMsg}</div>
-                {errorMsg.includes('connecte-toi') && (
+                {errorMsg === t('auth_email_in_use_solo') && (
                   <a href="https://avid-athlete.vercel.app" style={{ fontSize: 12, color: '#E63946', fontWeight: 700, textDecoration: 'underline' }}>
-                    → Aller à la connexion
+                    {t('go_to_login')}
                   </a>
                 )}
               </div>
@@ -3157,11 +3159,11 @@ function SoloSetupScreen({ onCreate }) {
             <ConsentBox checked={form.cgu} onChange={v => set('cgu', v)}>{CguLabel}</ConsentBox>
 
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button onClick={() => setStep(2)} style={btnSecondary}>← Retour</button>
+              <button onClick={() => setStep(2)} style={btnSecondary}>{t('back')}</button>
               <button onClick={handleCreate} disabled={saving || !form.cgu} style={{ ...btnPrimary(form.cgu), flex: 2, opacity: saving ? .6 : 1 }}
                 onMouseEnter={e => !saving && form.cgu && (e.currentTarget.style.background = '#E63946')}
                 onMouseLeave={e => e.currentTarget.style.background = '#12151C'}>
-                {saving ? 'Création...' : 'Commencer →'}
+                {saving ? t('creating') : t('start')}
               </button>
             </div>
           </div>
