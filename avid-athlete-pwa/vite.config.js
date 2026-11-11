@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'AVID Performance — Mon Programme',
+        name: 'AVID Performance Lab',
         short_name: 'AVID Athlete',
-        description: 'Ton programme d\'entraînement personnalisé',
+        description: 'Ton programme d\'entraînement personnalisé · Your personalized training program',
         theme_color: '#0F0F0F',
         background_color: '#0F0F0F',
         display: 'standalone',
