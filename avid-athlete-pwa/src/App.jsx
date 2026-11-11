@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { db, app } from './firebase.js'
-import { t, tf, catLabel, cardioLabel, effortLabel, sexLabel, catBadge, blocText, numLocale, dateLocale, detectLang, saveLang, setCurrentLang } from './i18n.js'
+import { t, tf, catLabel, cardioLabel, effortLabel, sexLabel, catBadge, blocText, numLocale, dateLocale, detectLang, saveLang, setCurrentLang, getLang } from './i18n.js'
 import { doc, onSnapshot, collection, query, where, setDoc, updateDoc, getDocs, getDoc } from 'firebase/firestore'
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
@@ -331,10 +331,10 @@ export default function App() {
       createdAt: Date.now(),
       blocs: [{
         id: uid(),
-        label: 'Bloc 1',
+        label: `${t('default_block')} 1`,
         semaines: [{
           id: uid(),
-          label: 'Semaine 1',
+          label: `${t('default_week')} 1`,
           seances: []
         }]
       }]
@@ -471,7 +471,7 @@ function ProgrammeView({ athlete, cahiers, saveCahier, notify, saveAthlete }) {
     const label = window.prompt(t('prompt_new_block'), `${t('default_block')} ${athlete.blocs.length + 1}`)
     if (!label) return
     const updated = JSON.parse(JSON.stringify(athlete))
-    updated.blocs.push({ id: uid(), label, semaines: [{ id: uid(), label: 'Semaine 1', seances: [] }] })
+    updated.blocs.push({ id: uid(), label, semaines: [{ id: uid(), label: `${t('default_week')} 1`, seances: [] }] })
     saveAthlete(updated)
     notify(t('ok_block_created'), C.green)
     setTimeout(() => { setBlocIdx(updated.blocs.length - 1); setSemIdx(0) }, 300)
@@ -2761,7 +2761,7 @@ function LoginScreen({ athleteId, lang, setLang }) {
   async function handleResetPassword() {
     if (!email.trim()) { setErrorMsg(t('login_need_email')); return }
     try {
-      await sendPasswordResetEmail(auth, email.trim())
+      auth.languageCode = getLang(); await sendPasswordResetEmail(auth, email.trim())
       setResetSent(true)
     } catch (e) {
       setErrorMsg(mapError(e.code))
@@ -2888,7 +2888,7 @@ function SignupScreen({ athleteId, onDone, lang, setLang }) {
   async function handleResetPassword() {
     if (!email.trim()) { setErrorMsg(t('login_need_email')); return }
     try {
-      await sendPasswordResetEmail(auth, email.trim())
+      auth.languageCode = getLang(); await sendPasswordResetEmail(auth, email.trim())
       setResetSent(true)
     } catch (e) {
       setErrorMsg(mapError(e.code))
