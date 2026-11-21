@@ -498,6 +498,11 @@ const STORAGE_KEY = 'avid_lang'
 let current = 'fr'
 
 export function detectLang() {
+  // Lien venant du site (?lang=en) : la langue demandée est prise et mémorisée
+  try {
+    const q = new URLSearchParams(window.location.search).get('lang')
+    if (q === 'fr' || q === 'en') { try { localStorage.setItem(STORAGE_KEY, q) } catch (e) {} return q }
+  } catch (e) {}
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved === 'fr' || saved === 'en') return saved
